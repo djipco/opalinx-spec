@@ -1,4 +1,4 @@
-# Open Protocol for Addressable LEDs
+# OPAL - Open Protocol for Addressable LEDs
 ### Version: 1.0.0
 
 > [!WARNING]
@@ -48,17 +48,15 @@ following unencoded structure:
 |----------------|----------------------|----------------|----------|----------|
 | 2 bytes        | 1 byte               | 2 bytes        | variable | 2 bytes  |
 
-Every message is encoded using 
-[Consistent Overhead Byte Stuffing](https://en.wikipedia.org/wiki/Consistent_Overhead_Byte_Stuffing)
-(COBS) and terminated with a single `0x04` byte (`EOT`). **OPAL** uses a variant of COBS in which 
-`0x04` is the stuffed byte (rather than the conventional `0x00`); therefore the encoded frame is 
-guaranteed not to contain `0x04`. Encoders and decoders MUST operate on this variant.
-
-The receiver can resynchronize by reading until the delimiter, decoding the frame, and validating
-the CRC. If a `0x04` delimiter arrives while a frame is partially accumulated, the partial frame
-MUST be silently discarded; the receiver resets its accumulation buffer and processes subsequent
-frames normally. If COBS decoding of a received frame fails, the device MUST emit
-`ERR_FRAMING_ERROR` with transaction ID `0x0000` and offending identifier `0x00`.
+**OPAL** frames are encoded with 
+[Consistent Overhead Byte Stuffing (COBS)](https://en.wikipedia.org/wiki/Consistent_Overhead_Byte_Stuffing) 
+and terminated with a single `0x00` delimiter byte. The encoded frame is guaranteed not to contain 
+`0x00`. Receivers resynchronize by reading until the `0x00` delimiter, then COBS-decoding the 
+accumulated bytes and validating the CRC. If the accumulation buffer is empty when a delimiter is 
+received (a lone delimiter), it MUST be silently discarded. If the buffer is non-empty and COBS 
+decoding fails, the device MUST emit `ERR_FRAMING_ERROR` with transaction ID `0x0000` and offending 
+identifier `0x00`. In all cases the accumulation buffer is reset and subsequent frames are processed 
+normally.
 
 Receivers MUST apply validation in the following order: COBS decode, CRC, identifier range,
 payload length, then parameter values. This ensures that `ERR_CRC_MISMATCH` is always emitted
@@ -95,7 +93,7 @@ accommodate 1365 RGB or 1024 RGBW LEDs per `Set Pixels` message. Each device adv
 buffer capacity in the `max_payload_length` field of the `INFO` response; clients MUST NOT send a 
 payload exceeding the advertised value. Devices MUST reject frames exceeding their capacity with
 `ERR_INVALID_PAYLOAD_LENGTH`. After COBS encoding, a frame grows by at most one byte per 254 bytes 
-of input plus the `0x04` delimiter. Receivers SHOULD size their read buffers for the worst-case 
+of input plus the `0x00` delimiter. Receivers SHOULD size their read buffers for the worst-case 
 encoded length of the largest payload they intend to receive:
 
 ```
@@ -307,8 +305,8 @@ color order exactly; clients do not need to pre-swizzle.
   compatible color orders, and each targeted channel's configured LED count MUST be at least
   `LED_offset + LED_count`; otherwise the message MUST be rejected.
 
-Any rejected `Set Pixels` message MUST be rejected atomically with a single `ERR_INVALID_PARAMETER`
-response; no channel's buffer may be modified as a result of a rejected message.
+Any rejected `Set Pixels` message MUST be rejected atomically with a single `ERROR` response; no
+channel's buffer may be modified as a result of a rejected message.
 
 **Response**: Emits [`SET_PIXELS_ACK`](#set-pixels-ack-0xc0) on success if `TxID ≠ 0x0000`; no
 response if `TxID = 0x0000`. Emits [`ERROR`](#error-0xe0) on failure regardless of `TxID`. For
@@ -346,7 +344,11 @@ order; the device applies the swizzle internally.
 `Fill Channel` MUST be rejected with `ERR_INVALID_PARAMETER` if:
 
 - The payload length does not match the expected size for the target channel's configured color
-  order.
+  order. *(This check is deferred to the parameter-validation stage because the expected length
+  depends on the channel's configured color order, which is not known until the channel number is
+  resolved. Violations are therefore reported as `ERR_INVALID_PARAMETER` rather than
+  `ERR_INVALID_PAYLOAD_LENGTH`; this is an intentional exception to the general validation-order
+  rule.)*
 - For broadcast, the payload length is inconsistent with the configured color order of any targeted
   channel (i.e., all channels MUST share compatible component counts).
 
@@ -401,7 +403,8 @@ to establish a known state after connection or after an error condition.
 
 **Response**: [`RESET_ACK`](#reset-ack-0xd1) after LED transmission completes, or
 [`ERROR`](#error-0xe0) on failure. `RESET_ACK` is always sent regardless of `TxID`; `Reset` is
-a management command, not a streaming operation.
+a management command, not a streaming operation. The `RESET_ACK` response carries the echoed
+transaction ID, including `0x0000` if the request was sent with `TxID = 0x0000`.
 
 ## Response Messages
 
@@ -584,7 +587,7 @@ UART, TCP, and Bluetooth RFCOMM/SPP.
 
 Common transport bindings:
 
-- **USB serial / UART**: **OPAL** frames are sent as a raw byte stream. COBS encoding plus `0x04`
+- **USB serial / UART**: **OPAL** frames are sent as a raw byte stream. COBS encoding plus `0x00`
   delimiter applies directly.
 - **TCP / Ethernet over TCP**: **OPAL** frames may be transported unchanged over the TCP stream.
   TCP already provides reliability and ordering.
@@ -612,7 +615,7 @@ and `Ping`). A suggested timeout is 1 second over USB serial; timeouts may be ad
 transport (e.g., longer for high-latency links like Bluetooth LE). When waiting for `SHOW_ACK` or
 `RESET_ACK`, hosts MUST use the LED transmission time as the timeout basis rather than a fixed
 duration; at 800 kHz, transmission takes approximately `LED_count × 1.25 µs` per channel plus a
-minimum 50 µs inter-frame reset, plus transport latency.
+minimum 300 µs inter-frame reset, plus transport latency.
 
 Future versions may define additional transport bindings for other reliable or packet-based
 transports.
@@ -623,7 +626,7 @@ transports.
 An implementation is considered **OPAL** 1.0 conformant if it:
 
 - Accepts all request messages defined in this specification with the framing described.
-- Validates the COBS frame, `0x04` delimiter, identifier range, payload length, and CRC-16 on every 
+- Validates the COBS frame, `0x00` delimiter, identifier range, payload length, and CRC-16 on every 
   received message, and rejects any message with an invalid CRC with `ERR_CRC_MISMATCH`.
 - Rejects malformed messages by emitting an appropriate `ERROR` response without affecting the
   state of prior valid messages.
