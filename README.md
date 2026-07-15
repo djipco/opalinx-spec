@@ -431,9 +431,38 @@ Sent in response to [`Request Device Information`](#request-device-information-0
 | Max payload length      | 2 bytes  | Max accepted payload, in bytes, little-endian; MUST be ≥ 4101 |
 | Device name length      | 1 byte   | Length in bytes of the following UTF-8 string               |
 | Device name             | variable | UTF-8 encoded, not null-terminated                          |
+| Hardware revision length | 1 byte  | Length in bytes of the following UTF-8 string (`1`–`63`)    |
+| Hardware revision       | variable | Manufacturer-defined hardware revision                      |
+| Transport length        | 1 byte   | Length in bytes of the following UTF-8 identifier (`1`–`63`) |
+| Transport               | variable | Active transport carrying this OPAL connection              |
 
 A `device_name_length` of `0` is valid and indicates the device has no name; in this case the
-`device_name` field is absent and the payload ends after `device_name_length`.
+`device_name` field is absent and `hardware_revision_length` immediately follows
+`device_name_length`.
+
+`hardware_revision` and `transport` are mandatory, non-empty UTF-8 strings of at most 63 bytes.
+When a device cannot determine its hardware revision, it MUST report `unknown`. The hardware
+revision is manufacturer-defined; examples include `Rev A`, `1.2`, and `unknown`.
+
+The `transport` field identifies the active transport carrying the current OPAL connection. It
+does not identify intermediate adapters: a controller receiving OPAL through a UART reports
+`uart`, even when the host reaches that UART through a USB-to-UART bridge. Standard transport
+identifiers are lowercase ASCII:
+
+| Identifier      | Transport                                      |
+|-----------------|------------------------------------------------|
+| `uart`          | Hardware UART                                  |
+| `usb-cdc`       | USB Communications Device Class serial         |
+| `tcp`           | Transmission Control Protocol                  |
+| `udp`           | User Datagram Protocol                         |
+| `bluetooth-spp` | Bluetooth Serial Port Profile / RFCOMM         |
+| `bluetooth-le`  | Bluetooth Low Energy                           |
+
+Future specifications may define additional identifiers. Vendor-defined transports SHOULD use a
+namespaced identifier such as `vendor.example/custom-link`. Clients MUST accept and expose unknown
+transport identifiers and MUST NOT reject a device because its transport is unrecognized. The
+transport string identifies the binding only; it MUST NOT contain link speed, driver, adapter, or
+other diagnostic details.
 
 **Capability flags** (bit positions within the 32-bit little-endian field):
 
