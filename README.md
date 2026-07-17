@@ -206,13 +206,13 @@ connection establishment to verify connectivity or measure round-trip latency.
 
 ### Configure Device (`0x20`)
 
-Sets the LED color order, protocol speed, and LED count for one channel, or for all channels
+Sets the LED color order, signaling protocol, and LED count for one channel, or for all channels
 simultaneously (broadcast). Clients SHOULD send this during initialization, before streaming any
 pixel data.
 
-| TX ID   | IDENTIFIER | PAYLOAD LENGTH | CHANNEL | COLOR ORDER | SPEED  | LED COUNT | CHECKSUM |
-|---------|------------|----------------|---------|-------------|--------|-----------|----------|
-| 2 bytes | `0x20`     | `0x05` `0x00`  | 1 byte  | 1 byte      | 1 byte | 2 bytes   | 2 bytes  |
+| TX ID   | IDENTIFIER | PAYLOAD LENGTH | CHANNEL | COLOR ORDER | PROTOCOL | LED COUNT | CHECKSUM |
+|---------|------------|----------------|---------|-------------|----------|-----------|----------|
+| 2 bytes | `0x20`     | `0x05` `0x00`  | 1 byte  | 1 byte      | 1 byte   | 2 bytes   | 2 bytes  |
 
 **Channel number**:
 
@@ -242,9 +242,11 @@ Values `0x00`–`0x05` are 3-component (RGB) and `0x06`–`0x1D` are 4-component
 values are reserved and MUST be rejected with `ERR_INVALID_PARAMETER`. Devices that do not
 advertise `CAP_RGBW` MUST reject 4-component color orders with `ERR_UNSUPPORTED`.
 
-**Speed values**:
+**Protocol values**: select the WS281x signaling protocol — the chip family and its bit timing.
+(Named `protocol` rather than `speed` because the choice is a signaling variant, not merely a data
+rate.)
 
-| Value  | Speed              |
+| Value  | Protocol           |
 |--------|--------------------|
 | `0x00` | WS2811 at 800 kHz  |
 | `0x01` | WS2811 at 400 kHz  |
@@ -255,8 +257,8 @@ All other values are reserved and MUST be rejected with `ERR_INVALID_PARAMETER`.
 **LEDs on channel**: A 16-bit unsigned integer, little-endian. Devices MUST reject a value of
 `0` or any value exceeding their capacity with `ERR_INVALID_PARAMETER`.
 
-If `Configure Device` is not sent, implementations SHOULD default to GRB color order, 800 kHz
-speed, and a device-specific default LED count. On success, `Configure Device` MUST clear the
+If `Configure Device` is not sent, implementations SHOULD default to GRB color order, the WS2811
+800 kHz protocol, and a device-specific default LED count. On success, `Configure Device` MUST clear the
 pixel buffer of every affected channel to all-zeros; hosts MUST NOT rely on buffer contents 
 surviving a reconfiguration. A broadcast `Configure Device` MUST be applied atomically: either all 
 channels are reconfigured and their buffers cleared, or no channel is modified.
@@ -391,6 +393,62 @@ regardless of `TxID`. Hosts that use a non-zero `TxID` for `Show` and wait for `
 issuing the next `Show` are guaranteed never to receive `ERR_BUSY`. For high-throughput streaming,
 `TxID = 0x0000` is recommended to avoid ACK overhead.
 
+### Frame Pipelining
+
+Frame transmission on **WS281x** LEDs takes a fixed, comparatively long time — roughly
+`LED_count × 1.25 µs` per channel plus a minimum 300 µs inter-frame reset. A host that waits for
+`SHOW_ACK` before issuing the next `Show` (the lock-step pattern above) leaves the device idle for
+one host round-trip at every frame boundary, because the device cannot begin the next frame until a
+new `Show` arrives. Frame pipelining removes that idle gap by letting the host queue the next `Show`
+while the current frame is still transmitting.
+
+**Frame pipelining is a mandatory part of OPAL.** Every conformant device supports a one-deep `Show`
+queue, so a host can always pipeline without negotiating a capability first — pipelining is never
+rejected and is never slower than lock-step. This universality is deliberate: it lets host libraries
+keep the transmission pipe full by default rather than treating high throughput as an optional
+extra.
+
+**Device behavior (mandatory).** Every conformant device MUST tolerate exactly one queued broadcast
+`Show`:
+
+- A broadcast `Show` that arrives while the device is transmitting a previous frame, and while no
+  other `Show` is already queued, MUST be accepted (not rejected with `ERR_BUSY`). The device MUST
+  begin transmitting the queued frame as soon as the current frame completes, including the
+  inter-frame reset period.
+- A `Show` that arrives while a `Show` is already queued MUST be rejected with `ERR_BUSY`. This
+  bounds the device to a single queued frame.
+- Holding a queued frame while transmitting the current one implies at least one frame of buffering
+  ahead of the output (double buffering). This is the one hardware requirement pipelining places on
+  a conformant device; it is inexpensive for any practical **WS281x** controller.
+- A device MAY satisfy the requirement by serializing — accepting the queued `Show` but not
+  overlapping any preparation with reception. Such a device is fully conformant; it simply gains no
+  throughput benefit. A device that overlaps preparation and transmission of the queued frame with
+  continued reception of the next frame's data obtains the full benefit. The wire-visible behaviour
+  is identical either way, so the host treats all conformant devices the same and never needs to
+  distinguish them.
+
+The device samples a queued frame's channel buffers when it begins transmitting that frame, not
+when the `Show` is queued. A device MAY reject `Set Pixels`, `Fill Channel`, or `Configure Device`
+messages that arrive while a `Show` is queued with `ERR_BUSY`, since such messages would otherwise
+overwrite the queued frame's not-yet-sampled buffers.
+
+**Host discipline.** A pipelining host keeps at most one `Show` queued beyond the transmitting frame
+and MUST use a non-zero `TxID` on every pipelined `Show` so it can track completion. Having sent
+`Show` for frame *N+1* while frame *N* is still transmitting, the host MUST NOT send any
+`Set Pixels`, `Fill Channel`, or `Configure Device` for a later frame until it has received
+`SHOW_ACK` for frame *N*. That acknowledgement is emitted when frame *N*'s transmission completes and
+frame *N+1* has been committed to hardware, so it guarantees frame *N+1*'s buffers have been sampled
+and are safe to overwrite. This rule bounds the host to a single queued `Show` and keeps the
+acknowledgement round-trip off the critical path, since the next `Show` is already waiting in the
+device when the current frame finishes.
+
+The pixel traffic itself stays fire-and-forget: `Set Pixels` and `Fill Channel` use `TxID = 0x0000`
+and are never acknowledged. Only the frame-boundary `Show` carries a non-zero `TxID`; that single
+lightweight acknowledgement per frame is the host's pacing and buffer-safety signal. A lagging
+`SHOW_ACK` stream is therefore the backpressure signal: if acknowledgements fall behind, the host is
+outrunning the device and MUST stop queuing further `Show` messages until the outstanding
+acknowledgement arrives, rather than risk `ERR_BUSY`.
+
 ### Reset (`0x51`)
 
 Resets the device to its power-on state: clears all channel buffers to zero, restores all channel
@@ -433,6 +491,8 @@ Sent in response to [`Request Device Information`](#request-device-information-0
 | Device name             | variable | UTF-8 encoded, not null-terminated                          |
 | Hardware revision length | 1 byte  | Length in bytes of the following UTF-8 string (`1`–`63`)    |
 | Hardware revision       | variable | Manufacturer-defined hardware revision                      |
+| Hardware platform length | 1 byte  | Length in bytes of the following UTF-8 string (`1`–`63`)    |
+| Hardware platform       | variable | Processor, module, or execution platform used by the device |
 | Transport length        | 1 byte   | Length in bytes of the following UTF-8 identifier (`1`–`63`) |
 | Transport               | variable | Active transport carrying this OPAL connection              |
 
@@ -440,9 +500,15 @@ A `device_name_length` of `0` is valid and indicates the device has no name; in 
 `device_name` field is absent and `hardware_revision_length` immediately follows
 `device_name_length`.
 
-`hardware_revision` and `transport` are mandatory, non-empty UTF-8 strings of at most 63 bytes.
+`hardware_revision`, `hardware_platform`, and `transport` are mandatory, non-empty UTF-8 strings
+of at most 63 bytes.
 When a device cannot determine its hardware revision, it MUST report `unknown`. The hardware
 revision is manufacturer-defined; examples include `Rev A`, `1.2`, and `unknown`.
+
+The `hardware_platform` field identifies the processor, module, or computing platform on which
+the controller firmware runs. Examples include `ESP32-P4`, `Teensy 4.1`, and `RP2040`. It is
+informational and does not imply particular capabilities; clients MUST accept and expose unknown
+values. When a device cannot determine its platform, it MUST report `unknown`.
 
 The `transport` field identifies the active transport carrying the current OPAL connection. It
 does not identify intermediate adapters: a controller receiving OPAL through a UART reports
@@ -475,6 +541,10 @@ other diagnostic details.
 
 Clients MUST ignore unknown capability bits to remain forward-compatible.
 
+Frame pipelining is **not** a capability bit: every conformant device supports a one-deep `Show`
+queue (see [Frame Pipelining](#frame-pipelining)), so hosts pipeline unconditionally and there is
+nothing to advertise or negotiate.
+
 ### CONFIG (`0x82`, `0xA0`)
 
 Sent in response to [`Request Device Configuration`](#request-device-configuration-0x02)
@@ -495,7 +565,7 @@ Each entry has the following structure:
 | Field            | Size    | Description                                           |
 |------------------|---------|-------------------------------------------------------|
 | Color order      | 1 byte  | Encoding matches the `Configure Device` message       |
-| Speed            | 1 byte  | Encoding matches the `Configure Device` message       |
+| Protocol         | 1 byte  | Encoding matches the `Configure Device` message       |
 | LED count        | 2 bytes | 16-bit unsigned integer, little-endian                |
 
 ### PONG (`0x83`)
@@ -575,9 +645,17 @@ an `ERROR` response.
 Devices SHOULD emit the most specific applicable error code. `ERR_UNSPECIFIED` is reserved for
 conditions not covered by any other code and SHOULD NOT be used when a more specific code applies.
 
-`ERR_BUSY` MUST be emitted when a `Show` or `Reset` request arrives while the device is still
-transmitting a previous frame to the LEDs. Devices MAY also emit `ERR_BUSY` for `Set Pixels`,
-`Fill Channel`, or `Configure Device` messages received during active transmission.
+`ERR_BUSY` governs messages that arrive while the device is still transmitting a previous frame to
+the LEDs:
+
+- A `Show` request MUST be accepted and queued if no `Show` is already queued, and MUST be rejected
+  with `ERR_BUSY` only if a `Show` is already queued. See [Frame Pipelining](#frame-pipelining) for
+  the full one-deep queue semantics.
+- A `Reset` request MUST be rejected with `ERR_BUSY`. `Reset` is a management command, not a
+  streaming operation, and is not queued.
+- Devices MAY reject `Set Pixels`, `Fill Channel`, or `Configure Device` messages with `ERR_BUSY`
+  during active transmission, and MAY do so while a `Show` is queued to protect the queued frame's
+  buffers (see [Frame Pipelining](#frame-pipelining)).
 
 When `ERR_FRAMING_ERROR` is emitted, the transaction ID in the response MUST be `0x0000` and the
 offending identifier MUST be `0x00`, as neither could be recovered from the malformed frame.
@@ -593,8 +671,8 @@ A typical client session driving 300 RGB LEDs per channel on an 8-channel device
 1. Client opens serial connection.
 2. Client sends `Request Device Information` (`0x01`) to verify device presence and capabilities;
    device responds with `INFO` (`0x81`).
-3. Client sends `Configure Device` (`0x20`) with channel `255`, GRB color order, 800 kHz speed,
-   and 300 LEDs per channel; device responds with `CONFIG` (`0xA0`).
+3. Client sends `Configure Device` (`0x20`) with channel `255`, GRB color order, the WS2811 800 kHz
+   protocol, and 300 LEDs per channel; device responds with `CONFIG` (`0xA0`).
 4. Client sends `Set Pixels` (`0x40`) for channel 0 with 900 bytes (300 × 3) of pixel data.
 5. Client sends `Set Pixels` for channels 1 through 7 in the same manner.
 6. Client sends `Show` (`0x50`) with channel `255` to commit all eight channels simultaneously to
@@ -666,7 +744,10 @@ An implementation is considered **OPAL** 1.0 conformant if it:
   response on failure; on success, clears the pixel buffer of every affected channel to all-zeros
   atomically (for broadcast, either all channels are updated or none).
 - Responds to `Ping` with a `PONG` response.
-- Responds to `Reset` with a `RESET_ACK` response after LED transmission completes.
+- Responds to `Reset` with a `RESET_ACK` response after LED transmission completes, and rejects a
+  `Reset` received during active transmission with `ERR_BUSY`.
+- Tolerates a single queued broadcast `Show` per [Frame Pipelining](#frame-pipelining): accepts one
+  `Show` received during active transmission and rejects a second queued `Show` with `ERR_BUSY`.
 - Sends `SET_PIXELS_ACK`, `FILL_CHANNEL_ACK`, and `SHOW_ACK` responses for pixel and show
   operations received with `TxID ≠ 0x0000`.
 - Ignores unknown capability flags and reserved fields per the [Conventions](#conventions)
