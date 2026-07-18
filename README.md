@@ -242,9 +242,7 @@ Values `0x00`–`0x05` are 3-component (RGB) and `0x06`–`0x1D` are 4-component
 values are reserved and MUST be rejected with `ERR_INVALID_PARAMETER`. Devices that do not
 advertise `CAP_RGBW` MUST reject 4-component color orders with `ERR_UNSUPPORTED`.
 
-**Protocol values**: select the WS281x signaling protocol — the chip family and its bit timing.
-(Named `protocol` rather than `speed` because the choice is a signaling variant, not merely a data
-rate.)
+**Protocol values**: select the WS281x signaling protocol: the chip family and its bit timing.
 
 | Value  | Protocol           |
 |--------|--------------------|
