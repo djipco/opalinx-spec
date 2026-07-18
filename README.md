@@ -1,9 +1,11 @@
 # OPAL - Open Protocol for Addressable LEDs
-### Version: 1.0.0
+### Version: 1.0.0 (Draft)
 
 > [!WARNING]
-> **OPAL** is currently being stabilized but is still in alpha phase. Changes may occur before the
-> specification is officially declared stable.
+> **OPAL 1.0 is a Draft.** The `1.0.0` number is the target wire contract, but the specification is
+> still being stabilized and breaking changes may occur before it is frozen. Implementations remain
+> pre-1.0 until then; see [`../VERSIONING.md`](../VERSIONING.md) for how the protocol, firmware, and
+> library versions relate.
 
 **OPAL** is a lightweight binary protocol that allows interfacing with compatible LED controllers 
 over a reliable byte stream (typically, serial over USB).
@@ -291,8 +293,10 @@ LEDs.
 - `255`: broadcast. Assigns the same color data to all channels simultaneously.
 
 **Color bytes per LED**: Determined by the configured color order: 3 bytes for RGB-family orders,
-4 bytes for RGBW-family orders. The byte order within each LED's data matches the configured
-color order exactly; clients do not need to pre-swizzle.
+4 bytes for RGBW-family orders. Each LED's bytes MUST be supplied in the channel's configured wire
+order (the color order set by `Configure Device`); the device writes them to the strip unchanged and
+never reorders them. Reordering from a logical layout is the host's responsibility. This keeps the
+device free of per-pixel work on the streaming path.
 
 **Payload length**: Equal to `1 + 2 + 2 + (LED_count × bytes_per_LED)`.
 
@@ -310,7 +314,7 @@ color order exactly; clients do not need to pre-swizzle.
 Any rejected `Set Pixels` message MUST be rejected atomically with a single `ERROR` response; no
 channel's buffer may be modified as a result of a rejected message.
 
-**Response**: Emits [`SET_PIXELS_ACK`](#set-pixels-ack-0xc0) on success if `TxID ≠ 0x0000`; no
+**Response**: Emits [`SET_PIXELS_ACK`](#set_pixels_ack-0xc0) on success if `TxID ≠ 0x0000`; no
 response if `TxID = 0x0000`. Emits [`ERROR`](#error-0xe0) on failure regardless of `TxID`. For
 high-throughput streaming, `TxID = 0x0000` is recommended to avoid ACK overhead.
 
@@ -328,13 +332,15 @@ buffered; a [`Show`](#show-0x50) message is required to commit.
 | Field          | Size   | Description                                                            |
 |----------------|--------|------------------------------------------------------------------------|
 | Channel number | 1 byte | Target channel; see channel addressing convention                      |
-| R              | 1 byte | Red component (0–255)                                                  |
-| G              | 1 byte | Green component (0–255)                                                |
-| B              | 1 byte | Blue component (0–255)                                                 |
-| W              | 1 byte | White component (0–255); present only when channel is RGBW-configured  |
+| Color byte 1   | 1 byte | First component in the channel's configured wire order                 |
+| Color byte 2   | 1 byte | Second component in the channel's configured wire order                |
+| Color byte 3   | 1 byte | Third component in the channel's configured wire order                 |
+| Color byte 4   | 1 byte | Fourth component in wire order; present only when channel is RGBW-configured |
 
-Color components are specified in logical RGBW order regardless of the channel's configured color
-order; the device applies the swizzle internally.
+The color is supplied in the channel's configured wire order — exactly as for
+[`Set Pixels`](#set-pixels-0x40) — and the device writes it to every LED unchanged. The device never
+reorders components; converting from a logical layout is the host's responsibility. For example, on a
+`GRB` channel the three bytes are sent in G, R, B order.
 
 **Payload length**: `4` for RGB-configured channels, `5` for RGBW-configured channels.
 
@@ -351,15 +357,16 @@ order; the device applies the swizzle internally.
   resolved. Violations are therefore reported as `ERR_INVALID_PARAMETER` rather than
   `ERR_INVALID_PAYLOAD_LENGTH`; this is an intentional exception to the general validation-order
   rule.)*
-- For broadcast, the payload length is inconsistent with the configured color order of any targeted
-  channel (i.e., all channels MUST share compatible component counts).
+- For broadcast, any targeted channel's configured color order is not compatible with the supplied
+  wire bytes. Because the same bytes are written verbatim to every channel, all targeted channels
+  MUST share compatible color orders (not merely a matching component count).
 
 Any rejected `Fill Channel` message MUST be rejected atomically; no channel's buffer may be
 modified as a result of a rejected message.
 
 `Fill Channel` can be used to turn channels off (all components set to `0`) or to apply test colors.
 
-**Response**: Emits [`FILL_CHANNEL_ACK`](#fill-channel-ack-0xc1) on success if `TxID ≠ 0x0000`;
+**Response**: Emits [`FILL_CHANNEL_ACK`](#fill_channel_ack-0xc1) on success if `TxID ≠ 0x0000`;
 no response if `TxID = 0x0000`. Emits [`ERROR`](#error-0xe0) on failure regardless of `TxID`. For
 high-throughput streaming, `TxID = 0x0000` is recommended to avoid ACK overhead.
 
@@ -387,7 +394,7 @@ across `Show` messages, being overwritten only by subsequent `Set Pixels` or `Fi
 messages targeting that channel, or cleared by a successful `Configure Device`. This allows
 channels to be updated at independent frame rates.
 
-**Response**: Emits [`SHOW_ACK`](#show-ack-0xd0) after LED transmission completes if
+**Response**: Emits [`SHOW_ACK`](#show_ack-0xd0) after LED transmission completes if
 `TxID ≠ 0x0000`; no response if `TxID = 0x0000`. Emits [`ERROR`](#error-0xe0) on failure
 regardless of `TxID`. Hosts that use a non-zero `TxID` for `Show` and wait for `SHOW_ACK` before
 issuing the next `Show` are guaranteed never to receive `ERR_BUSY`. For high-throughput streaming,
@@ -459,7 +466,7 @@ to establish a known state after connection or after an error condition.
 |----------------|------------|----------------|----------|
 | 2 bytes        | `0x51`     | `0x00` `0x00`  | 2 bytes  |
 
-**Response**: [`RESET_ACK`](#reset-ack-0xd1) after LED transmission completes, or
+**Response**: [`RESET_ACK`](#reset_ack-0xd1) after LED transmission completes, or
 [`ERROR`](#error-0xe0) on failure. `RESET_ACK` is always sent regardless of `TxID`; `Reset` is
 a management command, not a streaming operation. The `RESET_ACK` response carries the echoed
 transaction ID, including `0x0000` if the request was sent with `TxID = 0x0000`.
