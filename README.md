@@ -719,22 +719,13 @@ Sent in response to [`Request Device Information`](#request-device-information-0
 | Channel count           | 1 byte   | Number of 1.0-addressable channels (`N`), `1`–`255`          |
 | Capability flags        | 4 bytes  | Bitfield, little-endian; see capability bits below          |
 | Max payload length      | 2 bytes  | Largest accepted request payload, little-endian; MUST be ≥ 8, or ≥ 9 with `CAP_RGBW` |
-| Max LEDs (RGB)          | 2 bytes  | Max LEDs per channel in a 3-component order, little-endian; `0` = not advertised |
-| Max LEDs (RGBW)         | 2 bytes  | Max LEDs per channel in a 4-component order, little-endian; `0` = not advertised |
 | Information records     | variable | TLV records containing identity and extension information   |
 
-`max_leds_rgb` and `max_leds_rgbw` report the largest LED count the device accepts for one channel
-configured with a 3-component or 4-component color order, respectively. These limits are not
-derivable from `max_payload_length`: a channel can be updated across multiple `Set Pixels` messages,
-so its capacity can exceed the number of pixels carried by one payload. A value of `0` means that
-the device does not advertise a limit for that component count.
-Hosts MUST NOT infer a channel limit from `max_payload_length`; when the corresponding advertised
-limit is zero, a host SHOULD attempt the desired `Configure Device` request and handle
-`ERR_INVALID_PARAMETER` if the count exceeds the device's capacity.
-
-The fixed prefix is exactly 14 bytes. It contains only fields needed for wire compatibility,
-addressing, and resource planning. Firmware identity and descriptive strings are information records
+The fixed prefix is exactly 10 bytes. Firmware identity and descriptive strings are information records
 so future metadata does not enlarge or reorder the compatibility prefix.
+
+INFO does not advertise configuration limits. A device validates every `Configure Device` request
+and reports `ERR_INVALID_PARAMETER` when a requested configuration is unsupported.
 
 `hardware_revision`, `hardware_platform`, and `transport` records are mandatory, non-empty UTF-8
 strings of at most 63 bytes.
