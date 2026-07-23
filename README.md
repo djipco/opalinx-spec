@@ -552,11 +552,23 @@ keep the transmission pipe full by default rather than treating high throughput 
 extra.
 
 In OPAL 1.0 the pipeline depth is fixed at exactly `2`: one actively transmitting `Show` plus one
-queued `Show`. The `max_in_flight_frames` byte in [`INFO`](#info-0x81) is a compatibility constant,
-not a negotiated limit: a device MUST report `2`, a host MUST reject any other value as incompatible,
-and a host MUST NOT alter its pipeline behavior based on the reported value. A future protocol
-revision that permits another depth must first define the additional snapshot, buffer-ownership,
-admission, and acknowledgement semantics that depth requires.
+queued `Show`. This is part of the base protocol contract, not a negotiable device resource, so it is
+not repeated in [`INFO`](#info-0x81). A host implementing OPAL 1.0 always applies the state machine
+below.
+
+#### Future streaming models
+
+A deeper queue cannot be created by changing a numeric limit: the baseline queued `Show` reserves
+one staging-buffer generation and does not snapshot arbitrarily many future frames. Any future
+advanced streaming model MUST therefore be advertised explicitly using a standard INFO extension
+and capability assigned by that future specification, and MUST use separately assigned request and
+response messages. Its definition must specify buffer ownership, frame boundaries, admission,
+backpressure, completion, acknowledgement, and recovery semantics. It MUST NOT reinterpret or
+change the behavior of the OPAL 1.0 `Set Pixels`, `Fill Channel`, or `Show` messages.
+
+This leaves the mandatory baseline usable without negotiation while allowing future devices to add
+frame slots, buffer handles, bulk submission, compression, or deeper queues without complicating or
+weakening the 1.0 state machine.
 
 #### Pipeline buffer model
 
@@ -675,7 +687,6 @@ Sent in response to [`Request Device Information`](#request-device-information-0
 | Firmware version minor  | 1 byte   | Device firmware minor version                               |
 | Firmware version patch  | 1 byte   | Device firmware patch version                               |
 | Max payload length      | 2 bytes  | Max accepted payload, little-endian; MUST be ≥ 8, or ≥ 9 with `CAP_RGBW` |
-| Max in-flight frames    | 1 byte   | Pipeline-model compatibility constant; MUST be `2` in OPAL 1.0 |
 | Max LEDs (RGB)          | 2 bytes  | Max LEDs per channel in a 3-component order, little-endian; `0` = not advertised |
 | Max LEDs (RGBW)         | 2 bytes  | Max LEDs per channel in a 4-component order, little-endian; `0` = not advertised |
 | Device name length      | 1 byte   | Length in bytes of the following UTF-8 string               |
@@ -687,13 +698,6 @@ Sent in response to [`Request Device Information`](#request-device-information-0
 | Transport length        | 1 byte   | Length in bytes of the following UTF-8 identifier (`1`–`63`) |
 | Transport               | variable | Active transport carrying this OPAL connection              |
 | Extensions              | variable | Zero or more trailing TLV records; may be empty              |
-
-`max_in_flight_frames` is fixed at `2` in OPAL 1.0. It confirms that the device implements this
-revision's pipeline model—one active and one queued `Show`—but does not negotiate the host's pipeline
-depth. Hosts MUST decode it, MUST reject any other value during compatibility validation, and MUST
-always use the normative depth of two rather than adopting the reported byte. In particular, values
-greater than `2` do not advertise a deeper queue and values below `2` do not define a reduced
-conformance profile.
 
 `max_leds_rgb` and `max_leds_rgbw` report the largest LED count the device accepts for one channel
 configured with a 3-component or 4-component color order, respectively. These limits are not
@@ -782,10 +786,10 @@ a fixed field is not an additive extension and requires an incompatible protocol
 
 Clients MUST ignore unknown capability bits to remain forward-compatible.
 
-The mandatory one-deep `Show` queue is **not** a capability bit. Every conformant device reports the
-fixed compatibility value `max_in_flight_frames = 2` and supports one actively transmitting plus one
-queued `Show` (see [Frame Pipelining](#frame-pipelining)). The field is part of the current fixed INFO
-wire layout, but it is neither a capability nor a negotiable limit.
+The mandatory one-deep `Show` queue is **not** a capability bit or INFO field. Every conformant
+device supports one actively transmitting plus one queued `Show` as part of the base contract (see
+[Frame Pipelining](#frame-pipelining)). A future advanced streaming model is a separate additive
+feature and does not alter these messages.
 
 ### CONFIG (`0x82`, `0xA0`)
 
