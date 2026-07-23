@@ -28,12 +28,28 @@
       "wire_hex": "02ab03400b010101020204140a1e0104ffc74000"
     },
     {
-      "name": "show_broadcast",
+      "name": "fill_channel_broadcast",
       "tx_id": 65535,
       "identifier": 65,
       "payload_hex": "ff000000",
       "decoded_hex": "ffff410400ff0000008f28",
       "wire_hex": "05ffff410402ff0101038f2800"
+    },
+    {
+      "name": "show_all_channels",
+      "tx_id": 8738,
+      "identifier": 80,
+      "payload_hex": "ff",
+      "decoded_hex": "2222500100ff94a0",
+      "wire_hex": "052222500104ff94a000"
+    },
+    {
+      "name": "pong_empty_payload",
+      "tx_id": 8738,
+      "identifier": 131,
+      "payload_hex": "",
+      "decoded_hex": "222283000017e5",
+      "wire_hex": "04222283010317e500"
     },
     {
       "name": "set_pixels_crosses_cobs_254_byte_block",
