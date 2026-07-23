@@ -1,30 +1,30 @@
-# OPAL - Open Protocol for Addressable LEDs
+# Opalinx Protocol Specification
 ### Version: 1.0.0 (Draft)
 
 > [!WARNING]
-> **OPAL 1.0 is a Draft.** The `1.0.0` number is the target wire contract, but the specification is
+> **Opalinx 1.0 is a Draft.** The `1.0.0` number is the target wire contract, but the specification is
 > still being stabilized and breaking changes may occur before it is frozen. Implementations remain
 > pre-1.0 until then; see [`../VERSIONING.md`](../VERSIONING.md) for how the protocol, firmware, and
 > library versions relate.
 
-**OPAL** is a lightweight binary protocol that allows interfacing with compatible LED controllers 
+**Opalinx** is a lightweight binary protocol that allows interfacing with compatible LED controllers
 over a reliable byte stream (typically, serial over USB).
 
 
 ## Scope
 
-**OPAL** targets one-wire, addressable-LED chips in the **WS281x** family, including **WS2811**,
-**WS2812**, **WS2812B**, **WS2813**, and their variants (e.g., **WS2814**, **WS2815**, **SK6812**). 
+**Opalinx** targets one-wire, addressable-LED chips in the **WS281x** family, including **WS2811**,
+**WS2812**, **WS2812B**, **WS2813**, and their variants (e.g., **WS2814**, **WS2815**, **SK6812**).
 Both 3-component (RGB) and 4-component (RGBW) chips are supported.
 
 > [!NOTE]
 > Two-wire protocols such as **APA102** (DotStar) and **WS2801** are not currently in scope for
 > this specification.
 
-**OPAL** assumes a trusted, single-client transport binding that presents a reliable, ordered byte
+**Opalinx** assumes a trusted, single-client transport binding that presents a reliable, ordered byte
 stream. The core protocol does not define retransmission, duplicate suppression, network addressing,
 authentication, or fixture personality modeling. Packet and unreliable transports require a
-separate binding and are not core OPAL 1.0 transports.
+separate binding and are not core Opalinx 1.0 transports.
 
 
 ## Conventions
@@ -93,26 +93,26 @@ number.
 
 ### Draft revisions
 
-The Draft warning at the top of this document takes precedence until OPAL 1.0 is frozen: draft
+The Draft warning at the top of this document takes precedence until Opalinx 1.0 is frozen: draft
 implementations are developed as a coordinated set and the `1.0.0` tuple alone does not prove that
 two builds came from the same draft revision. An incompatible draft edit MUST update all maintained
 implementations and conformance vectors together. No independent implementation should claim stable
-OPAL 1.0 compatibility until the Draft marker is removed. Before that freeze, the project MUST either
+Opalinx 1.0 compatibility until the Draft marker is removed. Before that freeze, the project MUST either
 stop making incompatible changes or introduce an explicit on-wire draft-revision discriminator.
 
 
 ## General Message Format
 
-All **OPAL** messages, whether sent by a host (request) or by a device (response), share the 
+All **Opalinx** messages, whether sent by a host (request) or by a device (response), share the
 following unencoded structure:
 
 | TRANSACTION ID | MESSAGE IDENTIFIER   | PAYLOAD LENGTH | PAYLOAD  | CHECKSUM |
 |----------------|----------------------|----------------|----------|----------|
 | 2 bytes        | 1 byte               | 2 bytes        | variable | 2 bytes  |
 
-**OPAL** frames are encoded with 
-[Consistent Overhead Byte Stuffing (COBS)](https://en.wikipedia.org/wiki/Consistent_Overhead_Byte_Stuffing) 
-and terminated with a single `0x00` delimiter byte. The encoded frame is guaranteed not to contain 
+**Opalinx** frames are encoded with
+[Consistent Overhead Byte Stuffing (COBS)](https://en.wikipedia.org/wiki/Consistent_Overhead_Byte_Stuffing)
+and terminated with a single `0x00` delimiter byte. The encoded frame is guaranteed not to contain
 `0x00`. Receivers resynchronize at each delimiter and MUST bound the memory used to accumulate an
 encoded frame.
 
@@ -211,7 +211,7 @@ the advertised value. Because `Set Pixels` carries an LED offset, an arbitrarily
 updated through multiple messages without requiring the whole channel to fit in one payload. Devices
 MUST reject frames exceeding their capacity with `ERR_INVALID_PAYLOAD_LENGTH`. After COBS encoding,
 a frame grows by at most one byte per 254 bytes
-of input plus the `0x00` delimiter. Receivers SHOULD size their read buffers for the worst-case 
+of input plus the `0x00` delimiter. Receivers SHOULD size their read buffers for the worst-case
 encoded length of the largest payload they intend to receive:
 
 ```
@@ -227,7 +227,7 @@ The format used is **CRC-16/CCITT-FALSE** with the following parameters:
  - No input reflection, no output reflection, no final XOR.
 
 > [!NOTE]
-> Implementations can verify their CRC by computing it over the ASCII string `"123456789"`, which 
+> Implementations can verify their CRC by computing it over the ASCII string `"123456789"`, which
 > MUST yield `0x29B1`.
 
 Receivers MUST validate the CRC on every complete COBS-decoded candidate of at least seven bytes and
@@ -239,7 +239,7 @@ reliably located or validated.
 
 ## Message Ranges
 
-Messages are grouped by purpose. The high bit of the identifier byte distinguishes requests 
+Messages are grouped by purpose. The high bit of the identifier byte distinguishes requests
 (host→device) from responses (device→host).
 
 ### Requests (`0x00`–`0x7F`)
@@ -275,7 +275,7 @@ request identifier with the high bit set: a request with identifier `0x01` is pa
 response with identifier `0x81`. Error responses always use `ERROR` (`0xE0`) regardless of the
 originating request.
 
-**OPAL** 1.0 assumes a reliable, ordered, single-client transport. Hosts correlate responses to
+**Opalinx** 1.0 assumes a reliable, ordered, single-client transport. Hosts correlate responses to
 requests using the transaction ID echoed by the device.
 
 
@@ -380,8 +380,8 @@ All other values are reserved and MUST be rejected with `ERR_INVALID_PARAMETER`.
 
 If `Configure Device` is not sent, implementations SHOULD default to GRB color order, the WS2811
 800 kHz protocol, and a device-specific default LED count. On success, `Configure Device` MUST clear the
-pixel buffer of every affected channel to all-zeros; hosts MUST NOT rely on buffer contents 
-surviving a reconfiguration. A broadcast `Configure Device` MUST be applied atomically: either all 
+pixel buffer of every affected channel to all-zeros; hosts MUST NOT rely on buffer contents
+surviving a reconfiguration. A broadcast `Configure Device` MUST be applied atomically: either all
 channels are reconfigured and their buffers cleared, or no channel is modified.
 
 **Response**: [`CONFIG`](#config-0x82-0xa0) (`0xA0`, confirming the applied configuration) or
@@ -533,7 +533,7 @@ frame_time         = data_time + reset_time
 minimum_reset_time = 300 µs
 ```
 
-The protocol values defined by OPAL use a `1.25 µs` bit period at 800 kHz and a `2.5 µs` bit period
+The protocol values defined by Opalinx use a `1.25 µs` bit period at 800 kHz and a `2.5 µs` bit period
 at 400 kHz. Therefore, excluding the reset interval, one RGB LED takes approximately `30 µs` at
 800 kHz or `60 µs` at 400 kHz; one RGBW LED takes approximately `40 µs` at 800 kHz or `80 µs` at
 400 kHz. For a broadcast `Show`, all channels start together and the physical operation completes
@@ -545,15 +545,15 @@ the device idle for one host round-trip at every frame boundary, because the dev
 next frame until a new `Show` arrives. Frame pipelining removes that idle gap by letting the host
 queue the next `Show` while the current frame is still transmitting.
 
-**Frame pipelining is a mandatory part of OPAL.** Every conformant device supports a one-deep `Show`
+**Frame pipelining is a mandatory part of Opalinx.** Every conformant device supports a one-deep `Show`
 queue, so a host can always pipeline without negotiating a capability first — pipelining is never
 rejected and is never slower than lock-step. This universality is deliberate: it lets host libraries
 keep the transmission pipe full by default rather than treating high throughput as an optional
 extra.
 
-In OPAL 1.0 the pipeline depth is fixed at exactly `2`: one actively transmitting `Show` plus one
+In Opalinx 1.0 the pipeline depth is fixed at exactly `2`: one actively transmitting `Show` plus one
 queued `Show`. This is part of the base protocol contract, not a negotiable device resource, so it is
-not repeated in [`INFO`](#info-0x81). A host implementing OPAL 1.0 always applies the state machine
+not repeated in [`INFO`](#info-0x81). A host implementing Opalinx 1.0 always applies the state machine
 below.
 
 #### Future streaming models
@@ -564,7 +564,7 @@ advanced streaming model MUST therefore be advertised explicitly using a standar
 and capability assigned by that future specification, and MUST use separately assigned request and
 response messages. Its definition must specify buffer ownership, frame boundaries, admission,
 backpressure, completion, acknowledgement, and recovery semantics. It MUST NOT reinterpret or
-change the behavior of the OPAL 1.0 `Set Pixels`, `Fill Channel`, or `Show` messages.
+change the behavior of the Opalinx 1.0 `Set Pixels`, `Fill Channel`, or `Show` messages.
 
 This leaves the mandatory baseline usable without negotiation while allowing future devices to add
 frame slots, buffer handles, bulk submission, compression, or deeper queues without complicating or
@@ -678,26 +678,15 @@ Sent in response to [`Request Device Information`](#request-device-information-0
 
 | Field                   | Size     | Description                                                 |
 |-------------------------|----------|-------------------------------------------------------------|
-| Protocol version major  | 1 byte   | Major version of the **OPAL** protocol                      |
-| Protocol version minor  | 1 byte   | Minor version of the **OPAL** protocol                      |
-| Protocol version patch  | 1 byte   | Patch version of the **OPAL** protocol                      |
+| Protocol version major  | 1 byte   | Major version of the **Opalinx** protocol                      |
+| Protocol version minor  | 1 byte   | Minor version of the **Opalinx** protocol                      |
+| Protocol version patch  | 1 byte   | Patch version of the **Opalinx** protocol                      |
 | Channel count           | 1 byte   | Number of LED channels (`N`) supported by the device        |
 | Capability flags        | 4 bytes  | Bitfield, little-endian; see capability bits below          |
-| Firmware version major  | 1 byte   | Device firmware major version                               |
-| Firmware version minor  | 1 byte   | Device firmware minor version                               |
-| Firmware version patch  | 1 byte   | Device firmware patch version                               |
 | Max payload length      | 2 bytes  | Max accepted payload, little-endian; MUST be ≥ 8, or ≥ 9 with `CAP_RGBW` |
 | Max LEDs (RGB)          | 2 bytes  | Max LEDs per channel in a 3-component order, little-endian; `0` = not advertised |
 | Max LEDs (RGBW)         | 2 bytes  | Max LEDs per channel in a 4-component order, little-endian; `0` = not advertised |
-| Device name length      | 1 byte   | Length in bytes of the following UTF-8 string               |
-| Device name             | variable | UTF-8 encoded, not null-terminated                          |
-| Hardware revision length | 1 byte  | Length in bytes of the following UTF-8 string (`1`–`63`)    |
-| Hardware revision       | variable | Manufacturer-defined hardware revision                      |
-| Hardware platform length | 1 byte  | Length in bytes of the following UTF-8 string (`1`–`63`)    |
-| Hardware platform       | variable | Processor, module, or execution platform used by the device |
-| Transport length        | 1 byte   | Length in bytes of the following UTF-8 identifier (`1`–`63`) |
-| Transport               | variable | Active transport carrying this OPAL connection              |
-| Extensions              | variable | Zero or more trailing TLV records; may be empty              |
+| Information records     | variable | TLV records containing identity and extension information   |
 
 `max_leds_rgb` and `max_leds_rgbw` report the largest LED count the device accepts for one channel
 configured with a 3-component or 4-component color order, respectively. These limits are not
@@ -708,12 +697,12 @@ Hosts MUST NOT infer a channel limit from `max_payload_length`; when the corresp
 limit is zero, a host SHOULD attempt the desired `Configure Device` request and handle
 `ERR_INVALID_PARAMETER` if the count exceeds the device's capacity.
 
-A `device_name_length` of `0` is valid and indicates the device has no name; in this case the
-`device_name` field is absent and `hardware_revision_length` immediately follows
-`device_name_length`.
+The fixed prefix is exactly 14 bytes. It contains only fields needed for wire compatibility,
+addressing, and resource planning. Firmware identity and descriptive strings are information records
+so future metadata does not enlarge or reorder the compatibility prefix.
 
-`hardware_revision`, `hardware_platform`, and `transport` are mandatory, non-empty UTF-8 strings
-of at most 63 bytes.
+`hardware_revision`, `hardware_platform`, and `transport` records are mandatory, non-empty UTF-8
+strings of at most 63 bytes.
 When a device cannot determine its hardware revision, it MUST report `unknown`. The hardware
 revision is manufacturer-defined; examples include `Rev A`, `1.2`, and `unknown`.
 
@@ -722,8 +711,8 @@ the controller firmware runs. Examples include `ESP32-P4`, `Teensy 4.1`, and `RP
 informational and does not imply particular capabilities; clients MUST accept and expose unknown
 values. When a device cannot determine its platform, it MUST report `unknown`.
 
-The `transport` field identifies the active transport carrying the current OPAL connection. It
-does not identify intermediate adapters: a controller receiving OPAL through a UART reports
+The `transport` field identifies the active transport carrying the current Opalinx connection. It
+does not identify intermediate adapters: a controller receiving Opalinx through a UART reports
 `uart`, even when the host reaches that UART through a USB-to-UART bridge. Standard transport
 identifiers are lowercase ASCII:
 
@@ -742,9 +731,8 @@ other diagnostic details.
 
 #### INFO extensions
 
-After the `transport` string, the remainder of the INFO payload is an extension area containing zero
-or more type-length-value (TLV) records. The empty extension area used by existing OPAL 1.0 devices is
-valid. Each record has this structure:
+Immediately after the 14-byte fixed prefix, the remainder of the INFO payload contains
+type-length-value (TLV) information records. Each record has this structure:
 
 | Field  | Size     | Description                                      |
 |--------|----------|--------------------------------------------------|
@@ -757,7 +745,8 @@ Type assignments are divided into these ranges:
 | Range           | Purpose                                                     |
 |-----------------|-------------------------------------------------------------|
 | `0x00`          | Reserved; senders MUST NOT emit                              |
-| `0x01`–`0x7F`   | Standard extensions assigned by future OPAL specifications   |
+| `0x01`–`0x05`   | Standard Opalinx 1.0 information records                         |
+| `0x06`–`0x7F`   | Standard extensions assigned by future Opalinx specifications   |
 | `0x80`–`0xFF`   | Vendor-specific extensions                                   |
 
 The outer INFO payload length terminates the extension area; no end marker or padding is permitted.
@@ -765,15 +754,27 @@ Every record, including an unknown record, MUST fit completely within that paylo
 header, a value shorter than its declared length, or trailing bytes that cannot form a complete TLV
 make the INFO response malformed and MUST cause the host to reject it.
 
-Hosts MUST parse through the entire extension area and MUST skip unknown extension types using their
+Hosts MUST parse through the entire information-record area and MUST skip unknown record types using their
 declared lengths. Unknown standard or vendor extensions MUST NOT make an otherwise compatible device
 fail discovery. A sender MUST NOT repeat an extension type unless that extension's definition
 explicitly permits repetition. A host MUST reject duplicate instances of a known non-repeatable type;
 it MAY preserve or expose unknown records, including repeated unknown types, for diagnostics.
 
-No standard INFO extension types are assigned in OPAL 1.0. Adding a standard TLV is additive: it does
-not change the offsets or interpretation of the fixed fields above. Changing, removing, or reordering
-a fixed field is not an additive extension and requires an incompatible protocol revision.
+The Opalinx 1.0 standard records are:
+
+| Type   | Name                | Requirement | Value                                             |
+|--------|---------------------|-------------|---------------------------------------------------|
+| `0x01` | Firmware version    | Required    | Exactly 3 bytes: major, minor, patch              |
+| `0x02` | Device name         | Optional    | UTF-8, `0`–`255` bytes; omission means no name    |
+| `0x03` | Hardware revision   | Required    | UTF-8, `1`–`63` bytes                             |
+| `0x04` | Hardware platform   | Required    | UTF-8, `1`–`63` bytes                             |
+| `0x05` | Transport           | Required    | UTF-8 identifier, `1`–`63` bytes                  |
+
+Every required record MUST occur exactly once. A known standard record with an invalid length or a
+duplicate known record makes INFO malformed. Record order has no meaning; senders SHOULD emit
+standard records in ascending type order for deterministic diagnostics. Adding a standard record is
+additive and does not change the offsets or interpretation of the fixed prefix. Changing, removing,
+or reordering a fixed field requires an incompatible protocol revision.
 
 **Capability flags** (bit positions within the 32-bit little-endian field):
 
@@ -833,7 +834,7 @@ confirming that the pixel data has been buffered.
 
 ### FILL_CHANNEL_ACK (`0xC1`)
 
-Sent in response to a successful [`Fill Channel`](#fill-channel-0x41) request with `TxID ≠ 0x0000`, 
+Sent in response to a successful [`Fill Channel`](#fill-channel-0x41) request with `TxID ≠ 0x0000`,
 confirming that the fill has been buffered.
 
 | TRANSACTION ID | IDENTIFIER | PAYLOAD LENGTH | CHECKSUM |
@@ -907,7 +908,7 @@ These rules are summarized normatively in the [pipeline admission table](#device
 When `ERR_FRAMING_ERROR` is emitted, the transaction ID in the response MUST be `0x0000` and the
 offending identifier MUST be `0x00`, as neither could be recovered from the malformed frame.
 
-**OPAL** 1.0 uses the transaction ID echoed in every response — including `ERROR` responses — to
+**Opalinx** 1.0 uses the transaction ID echoed in every response — including `ERROR` responses — to
 correlate device replies with host requests.
 
 
@@ -934,7 +935,7 @@ into a single `Set Pixels` with channel `255`.
 
 ### Core stream contract
 
-**OPAL** 1.0 is defined over one full-duplex, reliable, ordered byte stream connecting one host to
+**Opalinx** 1.0 is defined over one full-duplex, reliable, ordered byte stream connecting one host to
 one device. A conforming core binding MUST:
 
 - deliver accepted bytes once, in order, without insertion or duplication;
@@ -942,7 +943,7 @@ one device. A conforming core binding MUST:
 - provide backpressure, flow control, buffering, or an equivalent mechanism sufficient to prevent
   routine receive overruns at the binding's documented operating rate;
 - expose connection loss as a transport failure rather than silently reconnecting a new peer into an
-  existing OPAL session;
+  existing Opalinx session;
 - reset partial-frame accumulation at a connection boundary.
 
 CRC and delimiter recovery detect corruption and restore framing after a fault; they do not make an
@@ -951,23 +952,23 @@ core protocol, and transaction IDs provide correlation rather than retransmissio
 
 The following standard identifiers denote direct core-stream bindings:
 
-- **`usb-cdc`**: OPAL frames are carried unchanged over a USB CDC byte stream.
-- **`uart`**: OPAL frames are carried unchanged over a hardware UART. The implementation MUST choose
+- **`usb-cdc`**: Opalinx frames are carried unchanged over a USB CDC byte stream.
+- **`uart`**: Opalinx frames are carried unchanged over a hardware UART. The implementation MUST choose
   baud rate, buffering, and hardware/software flow control so the documented operating mode meets the
   core stream contract. A UART overrun is a transport failure even if the parser later resynchronizes.
-- **`tcp`**: One OPAL session occupies one established TCP connection. Frames are carried unchanged
+- **`tcp`**: One Opalinx session occupies one established TCP connection. Frames are carried unchanged
   over the connection's byte stream.
 - **`bluetooth-spp`**: Frames are carried unchanged over one Bluetooth RFCOMM/SPP stream.
 
 ### Packet and non-stream transports
 
-UDP and Bluetooth LE GATT are not standard OPAL 1.0 core bindings. Merely placing one encoded frame
+UDP and Bluetooth LE GATT are not standard Opalinx 1.0 core bindings. Merely placing one encoded frame
 in a datagram, characteristic write, or notification does not supply the ordering and reliability
 contract the protocol requires.
 
 A future standard packet binding—or a vendor-defined experimental binding—must define at least:
 
-- mapping between OPAL frames and packets;
+- mapping between Opalinx frames and packets;
 - maximum transmission unit and fragmentation/reassembly;
 - packet and fragment ordering;
 - loss detection, acknowledgement, and retransmission;
@@ -979,8 +980,8 @@ A future standard packet binding—or a vendor-defined experimental binding—mu
 Until such a binding is published, an implementation using UDP, BLE GATT, or another non-stream
 transport MUST use a vendor-namespaced `transport` identifier such as
 `vendor.example/udp-binding-v1`; it MUST NOT report the unqualified identifiers `udp` or
-`bluetooth-le` or claim conformance to a standard OPAL binding. Its binding document is responsible
-for presenting reliable ordered frame delivery to the OPAL layer.
+`bluetooth-le` or claim conformance to a standard Opalinx binding. Its binding document is responsible
+for presenting reliable ordered frame delivery to the Opalinx layer.
 
 **Timeouts**: Hosts MUST implement a timeout when waiting for a response to messages that always
 produce one (`Request Device Information`, `Request Device Configuration`, `Configure Device`,
@@ -1006,7 +1007,7 @@ format, provided each binding supplies the delivery contract above.
 
 ## Conformance
 
-An implementation is considered **OPAL** 1.0 conformant if it:
+An implementation is considered **Opalinx** 1.0 conformant if it:
 
 - Accepts all request messages defined in this specification with the framing described.
 - Implements the bounded accumulation, oversized-frame discard, delimiter recovery, and exact
@@ -1028,7 +1029,7 @@ An implementation is considered **OPAL** 1.0 conformant if it:
   operations received with `TxID ≠ 0x0000`.
 - Ignores unknown capability flags and reserved fields per the [Conventions](#conventions)
   section.
-- Honors the `0x70`–`0x7F` and `0xF0`–`0xFF` vendor-specific identifier ranges by either 
+- Honors the `0x70`–`0x7F` and `0xF0`–`0xFF` vendor-specific identifier ranges by either
   implementing them or rejecting them cleanly with `ERR_UNKNOWN_IDENTIFIER`.
 
 Implementations MAY add vendor-specific requests in the `0x70`–`0x7F` range and vendor-specific
@@ -1038,7 +1039,7 @@ recognize SHOULD ignore them.
 
 ## Security Considerations
 
-**OPAL** 1.0 provides no authentication, authorization, or encryption. It assumes the underlying
+**Opalinx** 1.0 provides no authentication, authorization, or encryption. It assumes the underlying
 transport is trusted.
 
 For USB serial connections this assumption is reasonable: physical access to the host is required
@@ -1046,44 +1047,44 @@ to open the port, which implies the ability to control any connected device.
 
 For network transports (TCP, Bluetooth RFCOMM/SPP), the assumption does not hold automatically.
 Any endpoint that can reach the device's network address or Bluetooth service can send arbitrary
-**OPAL** commands — configuring channels, overwriting pixel buffers, and issuing resets — without
+**Opalinx** commands — configuring channels, overwriting pixel buffers, and issuing resets — without
 any credential. Deployments using these transports MUST secure the transport layer externally
 (e.g., TLS for TCP, authenticated pairing for Bluetooth) or restrict access at the network or
-OS level before exposing an **OPAL** device.
+OS level before exposing an **Opalinx** device.
 
 The CRC-16 checksum detects accidental bit errors in transit; it does not provide tamper
 protection. An attacker with the ability to modify frames in transit can recompute a valid CRC
-over altered data. **OPAL** offers no mechanism to detect or prevent deliberate tampering.
+over altered data. **Opalinx** offers no mechanism to detect or prevent deliberate tampering.
 
 
 ## Specification Governance
 
-**OPAL** is a centrally governed protocol. The author and maintainer of this repository is the sole 
-authority for publishing official versions of the **OPAL** specification.
+**Opalinx** is a centrally governed protocol. The author and maintainer of this repository is the sole
+authority for publishing official versions of the **Opalinx** specification.
 
 Proposed changes, clarifications, and extensions may be submitted for discussion, but only versions
-published by the official **OPAL** repository are considered authoritative.
+published by the official **Opalinx** repository are considered authoritative.
 
 
 ## License Summary
 
-OPAL is free to implement in software. You may create, distribute, sell, or commercially license 
+Opalinx is free to implement in software. You may create, distribute, sell, or commercially license
 software libraries, host applications, plugins, tools, test suites, tutorials, and integrations that
-communicate with OPAL-compatible devices.
+communicate with Opalinx-compatible devices.
 
-You may also implement OPAL in hardware or firmware for personal, educational, artistic, research, 
+You may also implement Opalinx in hardware or firmware for personal, educational, artistic, research,
 prototyping, and other non-commercial uses.
 
-A separate commercial license is required to manufacture, sell, distribute, bundle, lease, rent, 
-market, or otherwise commercialize hardware devices, firmware products, kits, modules, or 
-installation systems that implement OPAL or advertise OPAL compatibility.
+A separate commercial license is required to manufacture, sell, distribute, bundle, lease, rent,
+market, or otherwise commercialize hardware devices, firmware products, kits, modules, or
+installation systems that implement Opalinx or advertise Opalinx compatibility.
 
 In short:
 
-- commercial OPAL software is allowed;
-- non-commercial OPAL hardware experimentation is allowed;
-- commercial OPAL-compatible devices require a license;
-- the official OPAL specification remains under the authority of Jean-Philippe
+- commercial Opalinx software is allowed;
+- non-commercial Opalinx hardware experimentation is allowed;
+- commercial Opalinx-compatible devices require a license;
+- the official Opalinx specification remains under the authority of Jean-Philippe
   Côté.
 
 See [`LICENSE.md`](LICENSE.md) for the full legal text.
@@ -1091,13 +1092,13 @@ See [`LICENSE.md`](LICENSE.md) for the full legal text.
 
 ## Name Usage
 
-The name "**OPAL**" refers exclusively to the protocol defined by the canonical specification.
+The name "**Opalinx**" refers exclusively to the protocol defined by the canonical specification.
 
-Modified, extended, or incompatible protocols must not be described as **OPAL** or 
-**OPAL**-compatible.
+Modified, extended, or incompatible protocols must not be described as **Opalinx** or
+**Opalinx**-compatible.
 
-The name "**OPAL**" may only be used to refer to implementations or documents that conform to the 
-official **OPAL** specification published by the author. 
+The name "**Opalinx**" may only be used to refer to implementations or documents that conform to the
+official **Opalinx** specification published by the author.
 
 
 ## Contributing
@@ -1108,4 +1109,4 @@ to discuss changes before submitting pull requests against the specification tex
 
 ## Author
 
-OPAL was designed and authored by [Jean-Philippe Cô](https://djip.co), 2026.
+Opalinx was designed and authored by [Jean-Philippe Cô](https://djip.co), 2026.
