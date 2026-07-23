@@ -1034,6 +1034,34 @@ CRC and delimiter recovery detect corruption and restore framing after a fault; 
 unreliable transport reliable. Loss of a valid fire-and-forget request cannot be recovered by the
 core protocol, and transaction IDs provide correlation rather than retransmission or deduplication.
 
+### Connection and session boundaries
+
+One established transport connection is one Opalinx session. Transaction IDs and responses are
+scoped to that session and have no meaning after its connection ends. At every connection
+establishment and loss, an endpoint MUST discard partial receive-frame accumulation. A device MUST
+also discard all unsent responses from the old session so they cannot be delivered to a new host.
+
+A connection boundary is not a device reset. Device configuration, staging pixel buffers, currently
+displayed LED values, and diagnostic counters persist. If physical LED transmission has already
+started, it MUST be allowed to finish, but its old-session acknowledgement is discarded. A queued
+`Show` that has not started MUST be canceled, its acknowledgement discarded, and its staging-buffer
+reservation released. No other accepted operation is rolled back.
+
+Consequently, a newly connected host MUST NOT assume power-on defaults or known staging contents. It
+MUST begin with `Request Device Information`, SHOULD request the current configuration, and MUST
+overwrite or reset pixel state before issuing a `Show` unless intentionally preserving the previous
+session's content. A `Reset` remains the explicit operation for restoring power-on state.
+
+Bindings define observable boundaries as follows:
+
+- `usb-cdc`: a session begins when the CDC data interface is opened (DTR asserted) and ends when DTR
+  is deasserted, the USB device disconnects, or the interface is reset;
+- `tcp`: a session is one established TCP connection;
+- `bluetooth-spp`: a session is one established RFCOMM channel;
+- `uart`: UART has no intrinsic open/close event. One session begins when the device initializes the
+  link and continues until device/link reset, unless the binding documents an out-of-band boundary
+  signal. Merely reopening a host serial handle does not create a device-observable new session.
+
 The following standard identifiers denote direct core-stream bindings:
 
 - **`usb-cdc`**: Opalinx frames are carried unchanged over a USB CDC byte stream.
@@ -1067,7 +1095,8 @@ transport MUST use a vendor-namespaced `transport` identifier such as
 `bluetooth-le` or claim conformance to a standard Opalinx binding. Its binding document is responsible
 for presenting reliable ordered frame delivery to the Opalinx layer.
 
-**Timeouts**: Hosts MUST implement a timeout when waiting for a response to messages that always
+**Timeouts**: Hosts MUST implement a timeout when waiting for a response to nonzero-transaction-ID
+messages that produce one
 produce one (`Request Device Information`, `Request Device Configuration`, `Configure Device`,
 and `Ping`). A suggested timeout is 1 second over USB serial; timeouts may be adjusted for a
 higher-latency conforming binding. When waiting for `SHOW_ACK` or
@@ -1096,6 +1125,8 @@ An implementation is considered **Opalinx** 1.0 conformant if it:
 - Accepts all request messages defined in this specification with the framing described.
 - Implements the bounded accumulation, oversized-frame discard, delimiter recovery, and exact
   validation order defined in [Receiver Framing and Recovery](#receiver-framing-and-recovery).
+- Implements the session-boundary cleanup and persistent device state defined in
+  [Connection and session boundaries](#connection-and-session-boundaries).
 - Silently discards oversized, undecodable, short, and checksum-invalid candidates without affecting
   the state of prior valid messages; sends exactly one appropriate `ERROR` for other rejected requests
   with a nonzero transaction ID.
