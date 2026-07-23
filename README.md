@@ -240,7 +240,7 @@ convention:
 (`0`–`254`) on one device. The value `255` always means broadcast and MUST NOT be reinterpreted as a
 numbered channel by an extension.
 
-### Addressing limits and future expansion
+### Addressing limits
 
 Opalinx 1.0 deliberately uses compact fixed-width addressing:
 
@@ -252,15 +252,6 @@ Opalinx 1.0 deliberately uses compact fixed-width addressing:
 
 The mathematical sum `LED_offset + LED_count` MUST NOT exceed 65,535. A wrapped 16-bit result does
 not make an otherwise invalid span valid.
-
-These are addressing limits, not recommended installation sizes. Larger installations can use
-multiple devices without adding overhead to the normal 1.0 streaming path. If a future specification
-needs more channels or pixels per channel, it MUST define a dedicated discovery descriptor and new
-request/response messages with wider fields. It MUST NOT change the meaning of the existing
-`channel_count`, channel byte, `LED_offset`, `LED_count`, CONFIG entry, or broadcast sentinel. A
-device implementing such an extension MUST still expose a valid, independently usable 1.0 view of no
-more than 255 channels through the existing INFO and CONFIG messages.
-
 
 ## Request Messages
 
