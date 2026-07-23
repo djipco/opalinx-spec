@@ -56,61 +56,40 @@ encoded frame.
 
 ### Receiver Framing and Recovery
 
-Each endpoint MUST bound the amount of data retained for an encoded frame. A device MUST accept a
-frame carrying any request payload up to its advertised `max_payload_length`. A host MUST accept a
-frame carrying any response payload up to the protocol maximum of 65535 bytes. In both cases the
-supported encoded-frame length includes the seven decoded framing bytes and worst-case COBS
-overhead. If a nonzero-delimited run exceeds the applicable limit, the receiver MUST discard the
-entire run through its terminating `0x00`. It MUST NOT decode or dispatch any prefix of that run.
-This rule does not prescribe a parser state machine or storage strategy.
+Each endpoint MUST limit the bytes retained between delimiters. A device MUST accept a frame carrying
+any request payload up to its advertised `max_payload_length`; a host MUST accept a frame carrying
+any response payload up to 65535 bytes. The corresponding encoded-frame limit includes the seven
+decoded framing bytes and worst-case COBS overhead.
 
-On receipt of a delimiter, the receiver MUST behave as follows:
+An empty run between delimiters is ignored. If a run exceeds the applicable encoded-frame limit, the
+receiver MUST discard it through its terminating delimiter without decoding, responding, or changing
+protocol or pixel state. Otherwise, the run is one candidate frame. Rejecting one candidate MUST NOT
+prevent processing at the next delimiter.
 
-1. A run previously identified as oversized is silently discarded. No field in its incomplete
-   prefix is trustworthy, so it cannot be correlated.
-2. A delimiter with no preceding bytes is a lone delimiter and MUST be silently ignored.
-3. Otherwise, the bytes since the previous delimiter form one candidate frame. Processing that
-   candidate MUST NOT prevent reception or independent processing of the next candidate.
+A device processes each candidate in the following order. The first failing check determines the
+result, and a request MUST NOT be dispatched until all structural checks pass:
 
-A COBS-decoded frame has a minimum size of seven bytes: transaction ID (2), identifier (1), payload
-length (2), and CRC (2). A device MUST silently discard a candidate if COBS decoding fails or
-produces fewer than seven bytes.
+1. **COBS and minimum size**: Silently discard a candidate that cannot be decoded or is shorter than
+   seven decoded bytes.
+2. **CRC**: Treat the final two decoded bytes as the checksum and calculate the CRC over all preceding
+   bytes. Silently discard a mismatch.
+3. **Identifier and direction**: Reject identifiers `0x00` and `0x80`–`0xFF` with
+   `ERR_UNKNOWN_IDENTIFIER`.
+4. **Declared length**: The decoded size MUST equal `7 + payload_length`; otherwise reject the request
+   with `ERR_INVALID_PAYLOAD_LENGTH`.
+5. **Advertised request limit**: Reject a retained request whose payload exceeds
+   `max_payload_length` with `ERR_INVALID_PAYLOAD_LENGTH`.
+6. **Message-specific length**: Reject a recognized request whose payload has the wrong length with
+   `ERR_INVALID_PAYLOAD_LENGTH`.
+7. **Parameters and state**: Apply the rules defined by the request.
 
-For a decoded frame of at least seven bytes, the following list defines rejection precedence. If a
-candidate violates more than one rule, the externally visible result MUST correspond to the first
-applicable rule. An implementation need not perform checks in this order, but it MUST NOT dispatch a
-request unless every applicable structural check has passed.
+An error response echoes the recovered transaction ID and offending identifier and is sent only for
+a nonzero transaction ID. Candidates discarded before identifier validation receive no response.
 
-1. **CRC**: The received checksum is always the final two decoded bytes. It MUST NOT be located using
-   the untrusted payload-length field. Calculate the CRC over every preceding decoded byte. On
-   mismatch, silently discard the candidate. The recovered transaction ID and identifier are not
-   trustworthy when the checksum fails.
-2. **Identifier and direction**: A device accepts request identifiers `0x01`–`0x7F`. It MUST reject
-   `0x00` and response-space identifiers `0x80`–`0xFF` with `ERR_UNKNOWN_IDENTIFIER`, echoing the
-   recovered transaction ID and offending identifier.
-3. **Declared payload length**: The decoded size MUST equal `7 + payload_length`. A mismatch MUST
-   produce `ERR_INVALID_PAYLOAD_LENGTH`, echoing the recovered transaction ID and identifier.
-4. **Advertised request limit**: A structurally valid request payload exceeding the device's
-   advertised `max_payload_length` MUST produce `ERR_INVALID_PAYLOAD_LENGTH` when the complete
-   candidate was retained. A candidate discarded before its delimiter under the oversized-frame
-   rule receives no response.
-5. **Message-specific payload length**: A payload whose size differs from the exact size required by
-   its recognized message identifier MUST produce `ERR_INVALID_PAYLOAD_LENGTH`.
-6. **Parameter values and operational state**: Only after all preceding checks pass may the receiver
-   validate field values or dispatch the request.
-
-The oversized-frame rule is the only exception to CRC-first validation: the complete frame and its
-checksum were never retained, so CRC validation is impossible. An oversized frame causes exactly one
-silent discard at its terminating delimiter and MUST NOT affect previously accepted protocol or pixel
-state.
-
-A host receiving device output MUST apply the same bounded framing and delimiter recovery rules, but
-its internal validation order is not externally observable and need not match the device order above.
-Before accepting or correlating a response, it MUST validate COBS structure, minimum size, CRC,
-declared length, identifier/direction, and message-specific structure. It MUST treat the checksum as
-the final two decoded bytes rather than locating it through the untrusted payload-length field, and
-MUST NOT allocate unbounded storage from an unverified length. A failure is reported locally; the host
-discards the candidate, continues at the next delimiter, and MUST NOT send an `ERROR` response.
+A host MUST use the same bounded delimiter recovery and validate COBS structure, minimum size, CRC,
+declared length, identifier and direction, and message-specific structure before accepting a response.
+It reports failures locally, discards the candidate, continues at the next delimiter, and MUST NOT
+send an `ERROR` response.
 
 **Fields**:
 
@@ -142,18 +121,13 @@ discards the candidate, continues at the next delimiter, and MUST NOT send an `E
 
 **Frame size**: The protocol supports a maximum payload length of 65535 bytes (16-bit unsigned
 integer). Every implementation MUST accept at least 9 payload bytes, enough for one RGBW
-`Set Pixels` operation (`5` addressing bytes + `4` component bytes). Implementations intended
-for high-throughput streaming SHOULD accept at least 4101 payload bytes, sufficient for 1365 RGB or
-1024 RGBW LEDs per `Set Pixels` message, but this is a performance recommendation rather than a
-conformance requirement.
+`Set Pixels` operation (`5` addressing bytes + `4` component bytes).
 
 Each device advertises the largest request payload it accepts in the `max_payload_length` field of
 the `INFO` response. This is a wire limit, not a statement about storage or processing architecture.
 Clients MUST derive their chunk size from that field and MUST NOT send a request payload exceeding
-the advertised value. Because `Set Pixels` carries an LED offset, an arbitrarily long channel can be
-updated through multiple messages without requiring the whole channel to fit in one payload. The
-rejection and recovery rules for requests exceeding this limit are defined in
-[Receiver Framing and Recovery](#receiver-framing-and-recovery). After COBS encoding, a frame grows
+the advertised value. The rejection and recovery rules for requests exceeding this limit are defined
+in [Receiver Framing and Recovery](#receiver-framing-and-recovery). After COBS encoding, a frame grows
 by at most one byte per 254 bytes of input plus the `0x00` delimiter. The supported encoded-frame
 limit therefore includes the seven framing bytes, the payload, worst-case COBS overhead, and the
 delimiter.
@@ -217,10 +191,6 @@ request identifier with the high bit set: a request with identifier `0x01` is pa
 response with identifier `0x81`. Error responses always use `ERROR` (`0xE0`) regardless of the
 originating request.
 
-**Opalinx** 1.0 assumes a reliable, ordered, single-client transport. Hosts correlate responses to
-requests using the transaction ID echoed by the device.
-
-
 ## Channel Addressing Convention
 
 Messages that operate on a single LED channel use a one-byte channel identifier with the following
@@ -235,19 +205,6 @@ convention:
 `N` MUST be in the range `1`–`255`, so Opalinx 1.0 addresses at most 255 numbered channels
 (`0`–`254`) on one device. The value `255` always means broadcast and MUST NOT be reinterpreted as a
 numbered channel by an extension.
-
-### Addressing limits
-
-Opalinx 1.0 deliberately uses compact fixed-width addressing:
-
-| Resource | 1.0 limit | Consequence |
-|----------|-----------|-------------|
-| Numbered channels per device | 255 | Channel indices `0`–`254`; `255` remains broadcast |
-| LEDs per channel | 65,535 | Valid configured indices are `0`–`65,534` |
-| Pixel offset and count | 16 bits each | One `Set Pixels` span cannot end beyond exclusive index `65,535` |
-
-The mathematical sum `LED_offset + LED_count` MUST NOT exceed 65,535. A wrapped 16-bit result does
-not make an otherwise invalid span valid.
 
 ## Request Messages
 
