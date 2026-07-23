@@ -166,10 +166,10 @@ request unless every applicable structural check has passed.
    recovered transaction ID and offending identifier.
 3. **Declared payload length**: The decoded size MUST equal `7 + payload_length`. A mismatch MUST
    produce `ERR_INVALID_PAYLOAD_LENGTH`, echoing the recovered transaction ID and identifier.
-4. **Receiver capacity**: A structurally valid payload exceeding the receiver's advertised
-   `max_payload_length` MUST produce `ERR_INVALID_PAYLOAD_LENGTH` when the complete candidate was
-   retained. A candidate discarded before its delimiter under the oversized-frame rule receives no
-   response.
+4. **Advertised request limit**: A structurally valid request payload exceeding the device's
+   advertised `max_payload_length` MUST produce `ERR_INVALID_PAYLOAD_LENGTH` when the complete
+   candidate was retained. A candidate discarded before its delimiter under the oversized-frame
+   rule receives no response.
 5. **Message-specific payload length**: A payload whose size differs from the exact size required by
    its recognized message identifier MUST produce `ERR_INVALID_PAYLOAD_LENGTH`.
 6. **Parameter values and operational state**: Only after all preceding checks pass may the receiver
@@ -221,18 +221,16 @@ for high-throughput streaming SHOULD accept at least 4101 payload bytes, suffici
 1024 RGBW LEDs per `Set Pixels` message, but this is a performance recommendation rather than a
 conformance requirement.
 
-Each device advertises its actual buffer capacity in the `max_payload_length` field of the `INFO`
-response. Clients MUST derive their chunk size from that field and MUST NOT send a payload exceeding
+Each device advertises the largest request payload it accepts in the `max_payload_length` field of
+the `INFO` response. This is a wire limit, not a statement about storage or processing architecture.
+Clients MUST derive their chunk size from that field and MUST NOT send a request payload exceeding
 the advertised value. Because `Set Pixels` carries an LED offset, an arbitrarily long channel can be
-updated through multiple messages without requiring the whole channel to fit in one payload. Devices
-MUST reject frames exceeding their capacity with `ERR_INVALID_PAYLOAD_LENGTH`. After COBS encoding,
-a frame grows by at most one byte per 254 bytes
-of input plus the `0x00` delimiter. Receivers SHOULD size their read buffers for the worst-case
-encoded length of the largest payload they intend to receive:
-
-```
-Transaction ID + Identifier + Payload Length + Payload + CRC + COBS Overhead + Delimiter
-```
+updated through multiple messages without requiring the whole channel to fit in one payload. The
+rejection and recovery rules for requests exceeding this limit are defined in
+[Receiver Framing and Recovery](#receiver-framing-and-recovery). After COBS encoding, a frame grows
+by at most one byte per 254 bytes of input plus the `0x00` delimiter. The supported encoded-frame
+limit therefore includes the seven framing bytes, the payload, worst-case COBS overhead, and the
+delimiter.
 
 **CRC**:
 
@@ -716,16 +714,16 @@ Sent in response to [`Request Device Information`](#request-device-information-0
 | Protocol version patch  | 1 byte   | Patch version of the **Opalinx** protocol                      |
 | Channel count           | 1 byte   | Number of 1.0-addressable channels (`N`), `1`–`255`          |
 | Capability flags        | 4 bytes  | Bitfield, little-endian; see capability bits below          |
-| Max payload length      | 2 bytes  | Max accepted payload, little-endian; MUST be ≥ 8, or ≥ 9 with `CAP_RGBW` |
+| Max payload length      | 2 bytes  | Largest accepted request payload, little-endian; MUST be ≥ 8, or ≥ 9 with `CAP_RGBW` |
 | Max LEDs (RGB)          | 2 bytes  | Max LEDs per channel in a 3-component order, little-endian; `0` = not advertised |
 | Max LEDs (RGBW)         | 2 bytes  | Max LEDs per channel in a 4-component order, little-endian; `0` = not advertised |
 | Information records     | variable | TLV records containing identity and extension information   |
 
 `max_leds_rgb` and `max_leds_rgbw` report the largest LED count the device accepts for one channel
 configured with a 3-component or 4-component color order, respectively. These limits are not
-derivable from `max_payload_length`: a device can buffer a full channel across multiple
-`Set Pixels` messages, so its channel capacity can exceed the number of pixels carried by one
-payload. A value of `0` means that the device does not advertise a limit for that component count.
+derivable from `max_payload_length`: a channel can be updated across multiple `Set Pixels` messages,
+so its capacity can exceed the number of pixels carried by one payload. A value of `0` means that
+the device does not advertise a limit for that component count.
 Hosts MUST NOT infer a channel limit from `max_payload_length`; when the corresponding advertised
 limit is zero, a host SHOULD attempt the desired `Configure Device` request and handle
 `ERR_INVALID_PARAMETER` if the count exceeds the device's capacity.
