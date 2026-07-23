@@ -314,8 +314,8 @@ Sets the LED color order, signaling protocol, and LED count for all channels sim
 | `0x09` | GBRW  | `0x13` | RWBG  | `0x1D` | BGWR  |
 
 Values `0x00`–`0x05` are 3-component (RGB) and `0x06`–`0x1D` are 4-component (RGBW). Other values
-are unassigned in 1.0 and MUST be rejected with `ERR_INVALID_PARAMETER`. Every device MUST support
-both 3-component and 4-component color orders. CONFIG readers
+are unassigned in 1.0 and MUST be rejected with `ERR_INVALID_PARAMETER`. Every conformant device
+MUST support all assigned color-order values (`0x00`–`0x1D`). CONFIG readers
 MUST preserve and expose an unknown numeric color-order value rather than rejecting the entire
 response; a host MUST NOT send a color-order value it does not understand.
 
@@ -848,7 +848,7 @@ baseline is:
 | Broadcast Show | Mandatory |
 | Reset | Mandatory |
 | Namespaced vendor request | Envelope validation mandatory; individual namespaces optional |
-| RGB and RGBW configuration and data | Mandatory |
+| Configuration and pixel data using every assigned RGB and RGBW color order | Mandatory |
 | Additional signaling protocols | Mandatory only for values advertised in INFO record `0x06` |
 
 An advertised protocol value is a behavioral promise, not merely descriptive metadata. A device MUST
