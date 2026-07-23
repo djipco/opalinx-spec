@@ -5,8 +5,7 @@
   "type": "object",
   "required": ["corpus_version", "protocol_version", "valid_frames", "invalid_decoded_frames", "streams"],
   "properties": {
-    "$schema": { "type": "string" },
-    "corpus_version": { "const": 5 },
+    "corpus_version": { "type": "integer", "const": 5 },
     "protocol_version": {
       "type": "string",
       "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\\.[0-9A-Za-z-]+)*)?(\\+[0-9A-Za-z-]+(\\.[0-9A-Za-z-]+)*)?$"
@@ -14,6 +13,9 @@
     "valid_frames": { "type": "array", "items": { "$ref": "#/$defs/validFrame" } },
     "invalid_decoded_frames": { "type": "array", "items": { "$ref": "#/$defs/invalidFrame" } },
     "streams": { "type": "array", "items": { "$ref": "#/$defs/stream" } }
+  },
+  "patternProperties": {
+    "^\\$schema$": { "type": "string" }
   },
   "additionalProperties": false,
   "$defs": {
