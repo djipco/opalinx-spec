@@ -757,7 +757,7 @@ other diagnostic details.
 
 #### INFO extensions
 
-Immediately after the 14-byte fixed prefix, the remainder of the INFO payload contains
+Immediately after the 10-byte fixed prefix, the remainder of the INFO payload contains
 type-length-value (TLV) information records. Each record has this structure:
 
 | Field  | Size     | Description                                      |
@@ -797,7 +797,7 @@ The Opalinx 1.0 standard records are:
 | `0x03` | Hardware revision   | Required    | UTF-8, `1`–`63` bytes                             |
 | `0x04` | Hardware platform   | Required    | UTF-8, `1`–`63` bytes                             |
 | `0x05` | Transport           | Required    | UTF-8 identifier, `1`–`63` bytes                  |
-| `0x06` | Supported signaling protocols | Optional | Distinct one-byte protocol values; non-empty |
+| `0x06` | Supported signaling protocols | Conditional | Complete ascending set of accepted one-byte protocol values |
 | `0x7F` | Vendor information  | Optional    | Namespaced vendor-information envelope            |
 
 Every required record MUST occur exactly once. A known standard record with an invalid length or a
@@ -806,10 +806,12 @@ standard records in ascending type order for deterministic diagnostics. Adding a
 additive and does not change the offsets or interpretation of the fixed prefix. Changing, removing,
 or reordering a fixed field requires an incompatible protocol revision.
 
-When present, the `0x06` record lists every signaling-protocol value the device accepts in
-`Configure Device`, in ascending numeric order. Values are one byte each, the record MUST be
-non-empty, no value may repeat, and `0x00` MUST be present. Unknown values are retained as numbers;
-their presence does not make INFO incompatible.
+Every device supports the baseline signaling protocol `0x00`. Absence of record `0x06` means that
+`0x00` is the device's complete supported set. A device that accepts any other signaling-protocol
+value in `Configure Device` MUST include record `0x06`; when present, the record MUST list the
+complete supported set, including `0x00`, in ascending numeric order. Values are one byte each, the
+record MUST be non-empty, and no value may repeat. Unknown values are retained as numbers; their
+presence does not make INFO incompatible.
 
 Capability flags are reserved for simple boolean facts. A feature with parameters, variants,
 limits, or negotiation rules MUST use a dedicated information record or extension definition
