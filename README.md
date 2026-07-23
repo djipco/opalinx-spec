@@ -133,32 +133,29 @@ encoded frame.
 
 ### Receiver Framing and Recovery
 
-A receiver has two byte-stream states:
-
-- **Accumulating**: nonzero bytes are appended to the current encoded-frame buffer.
-- **Discarding oversized frame**: bytes are discarded until the next `0x00` delimiter. No prefix of
-  the oversized frame may be decoded or dispatched.
-
-The receiver's maximum encoded-frame length MUST be large enough for a frame carrying its advertised
-`max_payload_length`, including the seven decoded framing bytes and worst-case COBS overhead. If the
-accumulation exceeds that limit before a delimiter arrives, the receiver MUST enter the discarding
-state immediately and release or reuse the accumulated storage. This bounds memory even if a peer
-never sends a delimiter.
+A receiver MUST bound the amount of data retained for an encoded frame. Its supported maximum
+encoded-frame length MUST be large enough for a frame carrying its advertised `max_payload_length`,
+including the seven decoded framing bytes and worst-case COBS overhead. If a nonzero-delimited run
+exceeds that limit, the receiver MUST discard the entire run through its terminating `0x00`. It MUST
+NOT decode or dispatch any prefix of that run. This rule bounds resource use even if a peer never
+sends a delimiter; it does not prescribe a parser state machine or storage strategy.
 
 On receipt of a delimiter, the receiver MUST behave as follows:
 
-1. If it is discarding an oversized frame, it returns to the accumulating state and silently
-   discards that frame. No field in an incomplete prefix is trustworthy, so it cannot be correlated.
-2. If it is accumulating zero bytes, the delimiter is a lone delimiter and MUST be silently ignored.
-3. Otherwise, the accumulated bytes form one candidate frame. The receiver clears its accumulation
-   before processing the candidate so the next frame can be received independently.
+1. A run previously identified as oversized is silently discarded. No field in its incomplete
+   prefix is trustworthy, so it cannot be correlated.
+2. A delimiter with no preceding bytes is a lone delimiter and MUST be silently ignored.
+3. Otherwise, the bytes since the previous delimiter form one candidate frame. Processing that
+   candidate MUST NOT prevent reception or independent processing of the next candidate.
 
 A COBS-decoded frame has a minimum size of seven bytes: transaction ID (2), identifier (1), payload
 length (2), and CRC (2). A device MUST silently discard a candidate if COBS decoding fails or
 produces fewer than seven bytes.
 
-For a decoded frame of at least seven bytes, a device receiver MUST validate and reject in this exact
-order:
+For a decoded frame of at least seven bytes, the following list defines rejection precedence. If a
+candidate violates more than one rule, the externally visible result MUST correspond to the first
+applicable rule. An implementation need not perform checks in this order, but it MUST NOT dispatch a
+request unless every applicable structural check has passed.
 
 1. **CRC**: The received checksum is always the final two decoded bytes. It MUST NOT be located using
    the untrusted payload-length field. Calculate the CRC over every preceding decoded byte. On
@@ -170,8 +167,9 @@ order:
 3. **Declared payload length**: The decoded size MUST equal `7 + payload_length`. A mismatch MUST
    produce `ERR_INVALID_PAYLOAD_LENGTH`, echoing the recovered transaction ID and identifier.
 4. **Receiver capacity**: A structurally valid payload exceeding the receiver's advertised
-   `max_payload_length` MUST produce `ERR_INVALID_PAYLOAD_LENGTH`. In the usual bounded-buffer
-   implementation this case is already handled by the oversized-frame discard rule above.
+   `max_payload_length` MUST produce `ERR_INVALID_PAYLOAD_LENGTH` when the complete candidate was
+   retained. A candidate discarded before its delimiter under the oversized-frame rule receives no
+   response.
 5. **Message-specific payload length**: A payload whose size differs from the exact size required by
    its recognized message identifier MUST produce `ERR_INVALID_PAYLOAD_LENGTH`.
 6. **Parameter values and operational state**: Only after all preceding checks pass may the receiver
