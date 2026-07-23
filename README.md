@@ -131,9 +131,14 @@ result, and a request MUST NOT be dispatched until all structural checks pass:
    with `ERR_INVALID_PAYLOAD_LENGTH`.
 5. **Advertised request limit**: Reject a retained request whose payload exceeds
    `max_payload_length` with `ERR_INVALID_PAYLOAD_LENGTH`.
-6. **Message-specific length**: Reject a recognized request whose payload has the wrong length with
-   `ERR_INVALID_PAYLOAD_LENGTH`.
+6. **Message structure**: Reject a recognized request whose payload cannot have any structurally
+   valid length for that message with `ERR_INVALID_PAYLOAD_LENGTH`.
 7. **Parameters and state**: Apply the rules defined by the request.
+
+A length ruled out solely by the message identifier is structurally invalid and fails at step 6. If
+the payload has a structurally permitted length but its exact expected length depends on parsed field
+values or current device state, a mismatch is a parameter failure at step 7 and produces
+`ERR_INVALID_PARAMETER`.
 
 An error response echoes the recovered transaction ID and offending identifier and is sent only for
 a nonzero transaction ID. Candidates discarded before identifier validation receive no response.
@@ -380,7 +385,10 @@ configured wire order (the color order set by `Configure Device`). The resulting
 match those wire-order values. A host using a different logical color layout converts it before
 forming the request.
 
-**Payload length**: Equal to `1 + 2 + 2 + (LED_count × bytes_per_LED)`.
+**Payload length**: At least `5`, consisting of the fixed fields followed by pixel data. A shorter
+payload is structurally invalid and produces `ERR_INVALID_PAYLOAD_LENGTH`. After resolving the
+target channel configuration, the exact length MUST equal
+`1 + 2 + 2 + (LED_count × bytes_per_LED)`; a mismatch produces `ERR_INVALID_PARAMETER`.
 
 `Set Pixels` messages MUST satisfy all of the following; violations MUST be rejected with
 `ERR_INVALID_PARAMETER`:
@@ -423,21 +431,19 @@ The color is supplied in the channel's configured wire order — exactly as for
 LED. A host using a different logical color layout converts it before forming the request. For
 example, on a `GRB` channel the three bytes represent G, R, B in that order.
 
-**Payload length**: `4` for RGB-configured channels, `5` for RGBW-configured channels.
+**Payload length**: The structurally permitted lengths are `4` and `5`; any other length produces
+`ERR_INVALID_PAYLOAD_LENGTH`. After resolving the target channel configuration, the length MUST be
+`4` for RGB or `5` for RGBW; a mismatch produces `ERR_INVALID_PARAMETER`.
 
 **Channel number**:
 
 - `0` through `N-1`: Fills the specified channel.
 - `255` (broadcast): Fills all channels simultaneously.
 
-`Fill Channel` MUST be rejected with `ERR_INVALID_PARAMETER` if:
+`Fill Channel` MUST be rejected with `ERR_INVALID_PARAMETER` if the payload has a structurally
+permitted length but does not match the target configuration, including when:
 
-- The payload length does not match the expected size for the target channel's configured color
-  order. *(This check is deferred to the parameter-validation stage because the expected length
-  depends on the channel's configured color order, which is not known until the channel number is
-  resolved. Violations are therefore reported as `ERR_INVALID_PARAMETER` rather than
-  `ERR_INVALID_PAYLOAD_LENGTH`; this is an intentional exception to the general validation-order
-  rule.)*
+- Its length does not match the selected channel's configured component count.
 - For broadcast, the targeted channels do not all have the same configured color-order value.
   Matching component counts alone are insufficient because the same bytes are written verbatim to
   every channel.
@@ -800,8 +806,8 @@ output can never cause an error-response loop.
 |---------------|------------------------------|---------------------------------------------------|
 | `0x00`        | `ERR_UNSPECIFIED`            | Generic error                                     |
 | `0x01`        | `ERR_UNKNOWN_IDENTIFIER`     | Identifier byte not recognized                    |
-| `0x02`        | `ERR_INVALID_PAYLOAD_LENGTH` | Payload length ≠ message's expected size          |
-| `0x03`        | `ERR_INVALID_PARAMETER`      | A parameter value is out of range                 |
+| `0x02`        | `ERR_INVALID_PAYLOAD_LENGTH` | Payload has no structurally valid length for the message |
+| `0x03`        | `ERR_INVALID_PARAMETER`      | A field value or state-dependent combination is invalid |
 | `0x04`        | `ERR_BUSY`                   | Device cannot accept the message at this time     |
 | `0x05`        | `ERR_UNSUPPORTED`            | Message valid but unsupported by this device      |
 | `0x06`        | `ERR_DEVICE_FAULT`           | Device failed to complete an otherwise-valid operation |
