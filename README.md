@@ -1,75 +1,28 @@
-# Opalinx - Open Protocol for Addressable LEDs
+# OPAL - Open Protocol for Addressable LEDs
 ### Version: 1.0.0 (Draft)
 
 > [!WARNING]
-> **Opalinx 1.0 is a Draft.** The `1.0.0` number is the target wire contract, but the specification is
+> **OPAL 1.0 is a Draft.** The `1.0.0` number is the target wire contract, but the specification is
 > still being stabilized and breaking changes may occur before it is frozen. Implementations remain
-> pre-1.0 until then. The protocol, firmware builds, and client libraries are versioned as independent
-> lines: the protocol number stays `1.0.0` (its maturity is shown by this **Draft** marker, not the
-> number), while firmware and libraries live in `0.x` / prereleases until they ship. Each build reports
-> both its protocol version and its firmware version via `GET_INFO`.
->
-> **Draft compatibility caveat:** because the number stays `1.0.0` throughout the Draft, the wire
-> format (including the `GET_INFO` layout) can change **incompatibly without a version change**. The
-> reported version therefore does **not** distinguish Draft revisions — a checker that only compares
-> the major (or even the full `1.0.0`) cannot detect a mismatched Draft build. This is acceptable only
-> while the project is single-owner and no independently-built device or client exists yet. **Before**
-> any external/independent implementation ships, a concrete draft-revision signal (a distinct on-wire
-> draft number, or a `GET_INFO` schema-revision field decoded before the version-specific remainder)
-> **MUST** be introduced so incompatible Draft builds fail the handshake instead of misparsing.
+> pre-1.0 until then; see [`../VERSIONING.md`](../VERSIONING.md) for how the protocol, firmware, and
+> library versions relate.
 
-**Opalinx** is a lightweight binary protocol that allows interfacing with compatible LED controllers
+**OPAL** is a lightweight binary protocol that allows interfacing with compatible LED controllers 
 over a reliable byte stream (typically, serial over USB).
 
 
 ## Scope
 
-**Opalinx** targets one-wire, addressable-LED chips in the **WS281x** family, including **WS2811**,
-**WS2812**, **WS2812B**, **WS2813**, and their variants (e.g., **WS2814**, **WS2815**, **SK6812**).
+**OPAL** targets one-wire, addressable-LED chips in the **WS281x** family, including **WS2811**,
+**WS2812**, **WS2812B**, **WS2813**, and their variants (e.g., **WS2814**, **WS2815**, **SK6812**). 
 Both 3-component (RGB) and 4-component (RGBW) chips are supported.
 
 > [!NOTE]
 > Two-wire protocols such as **APA102** (DotStar) and **WS2801** are not currently in scope for
 > this specification.
 
-**Opalinx** assumes the transport is trusted and delivers bytes in order without loss. It does not
+**OPAL** assumes the transport is trusted and delivers bytes in order without loss. It does not 
 define reliability, authentication, network addressing, or fixture personality modeling.
-
-### Transport bandwidth (informative)
-
-*This subsection is informative. It defines no conformance requirements: Opalinx is transport-agnostic
-and behaves correctly at any speed. It only relates link throughput to achievable frame rate so that
-implementers can size a transport to their target.*
-
-Per-frame pixel payload is `LEDs_per_channel × active_channels × bytes_per_LED` (3 for RGB, 4 for
-RGBW) **when each channel carries independent data**, and the sustained throughput a host must
-deliver is that payload times the target frame rate, plus a few percent of framing overhead (COBS,
-the 5-byte header and 2-byte CRC per message, and one `Show` per frame). Broadcast **mirror mode**
-(the same content on every channel via `Channel = 255`) does **not** multiply by `active_channels`:
-the host sends one `LEDs_per_channel × bytes_per_LED` payload and the device fans it out, so the wire
-cost is that of a single channel regardless of how many are driven.
-
-A useful reference point is the throughput needed to keep the LED output **saturated** — i.e. so the
-transport, not the WS281x wire, is never the bottleneck. Because one 800 kHz LED consumes ~30 µs of
-wire time (RGB, 3 bytes) or ~40 µs (RGBW, 4 bytes), each parallel output channel needs about
-**100 KB/s at 800 kHz** (≈ 50 KB/s at 400 kHz), regardless of RGB vs RGBW. For a device that drives
-`K` channels in parallel, keeping them all saturated therefore takes roughly `K × 100 KB/s`.
-
-| Parallel channels @ 800 kHz | Throughput to saturate | Comfortable transport |
-|---|---|---|
-| 1–2   | ≤ 0.2 MB/s | ~2 Mbps UART bridge, or Full-Speed USB |
-| 3–4   | ~0.4 MB/s  | Full-Speed USB |
-| 8     | ~0.8 MB/s  | Full-Speed USB (marginal), High-Speed USB (ample) |
-| 16    | ~1.6 MB/s  | High-Speed USB |
-
-A UART's usable byte rate is well below its bit rate: with 8N1 framing each byte costs 10 bits, so a
-2 Mbps UART carries at most ~0.2 MB/s (200 KB/s) before Opalinx/COBS overhead — enough to saturate one
-to two 800 kHz channels, not four. Sizing a link for more parallel channels means Full-Speed USB or
-faster.
-
-Below the throughput its array demands, Opalinx still operates correctly — it simply becomes
-bandwidth-bound rather than wire-bound. Real-time streaming to large parallel arrays is best served
-by a High-Speed-capable transport; smaller arrays run comfortably on Full-Speed USB or a fast UART.
 
 
 ## Conventions
@@ -84,40 +37,32 @@ by a High-Speed-capable transport; smaller arrays run comfortably on Full-Speed 
 - **Reserved fields and bits**: Senders MUST set them to zero; receivers MUST ignore their
   contents.
 
-- **Versioning**: [Semantic versioning](https://semver.org/) is used **once the protocol is frozen**
-  (major version updates indicate breaking changes; minor version updates add features without
-  breaking existing clients). **During the Draft period this does not yet apply:** as the warning at
-  the top of this document states, the number stays `1.0.0` and breaking wire changes may occur
-  without a version bump until the Draft is frozen. SemVer's breaking-change-⇒-major rule governs all
-  revisions *after* the freeze.
+- **Versioning**: [Semantic versioning](https://semver.org/) is used (major version updates
+  indicate breaking changes; minor version updates add features without breaking existing clients).
 
 
 ## General Message Format
 
-All **Opalinx** messages, whether sent by a host (request) or by a device (response), share the
+All **OPAL** messages, whether sent by a host (request) or by a device (response), share the 
 following unencoded structure:
 
 | TRANSACTION ID | MESSAGE IDENTIFIER   | PAYLOAD LENGTH | PAYLOAD  | CHECKSUM |
 |----------------|----------------------|----------------|----------|----------|
 | 2 bytes        | 1 byte               | 2 bytes        | variable | 2 bytes  |
 
-**Opalinx** frames are encoded with
-[Consistent Overhead Byte Stuffing (COBS)](https://en.wikipedia.org/wiki/Consistent_Overhead_Byte_Stuffing)
-and terminated with a single `0x00` delimiter byte. The encoded frame is guaranteed not to contain
-`0x00`. Receivers resynchronize by reading until the `0x00` delimiter, then COBS-decoding the
-accumulated bytes and validating the CRC. If the accumulation buffer is empty when a delimiter is
-received (a lone delimiter), it MUST be silently discarded. If the buffer is non-empty and COBS
-decoding fails, the device MUST emit `ERR_FRAMING_ERROR` with transaction ID `0x0000` and offending
-identifier `0x00`. In all cases the accumulation buffer is reset and subsequent frames are processed
+**OPAL** frames are encoded with 
+[Consistent Overhead Byte Stuffing (COBS)](https://en.wikipedia.org/wiki/Consistent_Overhead_Byte_Stuffing) 
+and terminated with a single `0x00` delimiter byte. The encoded frame is guaranteed not to contain 
+`0x00`. Receivers resynchronize by reading until the `0x00` delimiter, then COBS-decoding the 
+accumulated bytes and validating the CRC. If the accumulation buffer is empty when a delimiter is 
+received (a lone delimiter), it MUST be silently discarded. If the buffer is non-empty and COBS 
+decoding fails, the device MUST emit `ERR_FRAMING_ERROR` with transaction ID `0x0000` and offending 
+identifier `0x00`. In all cases the accumulation buffer is reset and subsequent frames are processed 
 normally.
 
 Receivers MUST apply validation in the following order: COBS decode, CRC, identifier range,
 payload length, then parameter values. This ensures that `ERR_CRC_MISMATCH` is always emitted
-for corrupted frames regardless of what the corrupted identifier or payload-length bytes happen to
-contain. After COBS decoding, receivers MUST treat the final two decoded bytes as the checksum and
-compute the CRC over every preceding decoded byte; they MUST NOT use the untrusted payload-length
-field to locate the checksum. A decoded frame shorter than the seven-byte minimum has no recoverable
-checksum and is instead a framing error.
+for corrupted frames regardless of what the corrupted identifier byte happens to contain.
 
 **Fields**:
 
@@ -142,16 +87,15 @@ checksum and is instead a framing error.
  - **Payload**: Message-specific data. May be empty for some messages.
 
  - **Checksum**: Two bytes, little-endian, containing a CRC-16/CCITT-FALSE over `transaction id` +
-   `identifier` + `payload length` + `payload`. These are always the final two bytes of the decoded
-   frame, independently of the value in the payload-length field.
+   `identifier` + `payload length` + `payload`.
 
 **Frame size**: The protocol supports a maximum payload length of 65535 bytes (16-bit unsigned
-integer). **Opalinx** implementations MUST support at least 4101 bytes of payload, sufficient to
-accommodate 1365 RGB or 1024 RGBW LEDs per `Set Pixels` message. Each device advertises its actual
-buffer capacity in the `max_payload_length` field of the `INFO` response; clients MUST NOT send a
+integer). **OPAL** implementations MUST support at least 4101 bytes of payload, sufficient to
+accommodate 1365 RGB or 1024 RGBW LEDs per `Set Pixels` message. Each device advertises its actual 
+buffer capacity in the `max_payload_length` field of the `INFO` response; clients MUST NOT send a 
 payload exceeding the advertised value. Devices MUST reject frames exceeding their capacity with
-`ERR_INVALID_PAYLOAD_LENGTH`. After COBS encoding, a frame grows by at most one byte per 254 bytes
-of input plus the `0x00` delimiter. Receivers SHOULD size their read buffers for the worst-case
+`ERR_INVALID_PAYLOAD_LENGTH`. After COBS encoding, a frame grows by at most one byte per 254 bytes 
+of input plus the `0x00` delimiter. Receivers SHOULD size their read buffers for the worst-case 
 encoded length of the largest payload they intend to receive:
 
 ```
@@ -167,7 +111,7 @@ The format used is **CRC-16/CCITT-FALSE** with the following parameters:
  - No input reflection, no output reflection, no final XOR.
 
 > [!NOTE]
-> Implementations can verify their CRC by computing it over the ASCII string `"123456789"`, which
+> Implementations can verify their CRC by computing it over the ASCII string `"123456789"`, which 
 > MUST yield `0x29B1`.
 
 Receivers MUST validate the CRC on every incoming message and MUST reject any message with an
@@ -176,7 +120,7 @@ invalid CRC with `ERR_CRC_MISMATCH`.
 
 ## Message Ranges
 
-Messages are grouped by purpose. The high bit of the identifier byte distinguishes requests
+Messages are grouped by purpose. The high bit of the identifier byte distinguishes requests 
 (host→device) from responses (device→host).
 
 ### Requests (`0x00`–`0x7F`)
@@ -212,14 +156,8 @@ request identifier with the high bit set: a request with identifier `0x01` is pa
 response with identifier `0x81`. Error responses always use `ERROR` (`0xE0`) regardless of the
 originating request.
 
-**Opalinx** 1.0 assumes a reliable, ordered, single-client transport. Hosts correlate responses to
+**OPAL** 1.0 assumes a reliable, ordered, single-client transport. Hosts correlate responses to
 requests using the transaction ID echoed by the device.
-
-An acknowledgement confirms only the request carrying its transaction ID. It does **not**
-retroactively acknowledge earlier requests sent with `TxID = 0x0000`: each such request can still
-produce its own `ERROR`. A host that needs a one-shot or multi-message operation to fail as a unit
-MUST either acknowledge every constituent request, or observe and surface all intervening `ERROR`
-responses before treating a later ordered acknowledgement as the operation boundary.
 
 
 ## Channel Addressing Convention
@@ -318,47 +256,17 @@ rate.)
 
 All other values are reserved and MUST be rejected with `ERR_INVALID_PARAMETER`.
 
-Each protocol value selects a normative single-wire NRZ signaling profile. A device MUST drive the
-data line so that every bit's high time falls within the window below (measured at the device's
-output pin), and MUST hold the line low for at least the reset period between frames so the strip
-latches. The tolerance on each high time is ±150 ns, except the 400 kHz `1` high time — see the note
-below the table.
-
-| Value  | Bit period | `0` high (T0H) | `1` high (T1H)   | Reset (low) |
-|--------|-----------|----------------|------------------|-------------|
-| `0x00` | 1.25 µs   | 375 ns         | 800 ns           | ≥ 50 µs     |
-| `0x01` | 2.50 µs   | 500 ns         | 1200 ns (≤ 1600) | ≥ 50 µs     |
-| `0x02` | 1.25 µs   | 375 ns         | 800 ns           | ≥ 250 µs    |
-
-At 400 kHz the `1` high time (T1H) has a relaxed upper bound: it MAY range from 1050 ns up to
-1600 ns (rather than the ±150 ns window the other high times use). WS2811 low-speed parts sample near
-the center of the bit and tolerate a longer high pulse as long as the complementary low time still
-lets the next rising edge be detected, and this range matches the wider tolerances published in
-common WS2811 datasheet revisions. The relaxed bound lets controllers built on fixed-duty backends
-(which emit roughly 1.5 µs at 400 kHz — e.g. those using the OctoWS2811 library) remain conformant
-without loosening the 800 kHz profiles.
-
-The bit period is the sum of the high time and the complementary low time; a device MAY vary the
-split within tolerance provided the total period and the encoded high times are met. `0x02`
-(WS2813) shares the `0x00` bit timing but mandates the longer reset its parts require. These
-windows are the pacing basis for the frame-duration estimates in [Frame Pipelining](#frame-pipelining)
-and [Timeouts](#timeouts).
-
 **LEDs on channel**: A 16-bit unsigned integer, little-endian. Devices MUST reject a value of
 `0` or any value exceeding their capacity with `ERR_INVALID_PARAMETER`.
 
 If `Configure Device` is not sent, implementations SHOULD default to GRB color order, the WS2811
 800 kHz protocol, and a device-specific default LED count. On success, `Configure Device` MUST clear the
-pixel buffer of every affected channel to all-zeros; hosts MUST NOT rely on buffer contents
-surviving a reconfiguration. A broadcast `Configure Device` MUST be applied atomically: either all
-channels are reconfigured (and their buffers cleared), or no channel's **configuration** is modified.
-This atomicity guarantee covers configuration parameters and operational state; on failure a channel's
-buffered pixels MAY still be cleared (see the `ERR_DEVICE_FAULT` rules under Error Handling).
+pixel buffer of every affected channel to all-zeros; hosts MUST NOT rely on buffer contents 
+surviving a reconfiguration. A broadcast `Configure Device` MUST be applied atomically: either all 
+channels are reconfigured and their buffers cleared, or no channel is modified.
 
 **Response**: [`CONFIG`](#config-0x82-0xa0) (`0xA0`, confirming the applied configuration) or
-[`ERROR`](#error-0xe0) if the requested configuration is invalid (`ERR_INVALID_PARAMETER`) or the
-device cannot bring it into service (`ERR_DEVICE_FAULT`). A device MUST NOT return `CONFIG` unless
-the configuration is fully applied and operational.
+[`ERROR`](#error-0xe0) if the requested configuration is not supported.
 
 ### Set Pixels (`0x40`)
 
@@ -399,9 +307,8 @@ device free of per-pixel work on the streaming path.
 - `LED_offset` MUST be less than the configured number of LEDs on the target channel.
 - `LED_offset + LED_count` MUST be less than or equal to the configured number of LEDs on the
   target channel.
-- For broadcast pixel operations (`Channel number = 255`), all targeted channels MUST share the
-  **same** color order — the bytes are written verbatim to every channel, so a matching component
-  count is not sufficient — and each targeted channel's configured LED count MUST be at least
+- For broadcast pixel operations (`Channel number = 255`), all targeted channels MUST share
+  compatible color orders, and each targeted channel's configured LED count MUST be at least
   `LED_offset + LED_count`; otherwise the message MUST be rejected.
 
 Any rejected `Set Pixels` message MUST be rejected atomically with a single `ERROR` response; no
@@ -450,9 +357,9 @@ reorders components; converting from a logical layout is the host's responsibili
   resolved. Violations are therefore reported as `ERR_INVALID_PARAMETER` rather than
   `ERR_INVALID_PAYLOAD_LENGTH`; this is an intentional exception to the general validation-order
   rule.)*
-- For broadcast, any targeted channel's configured color order differs from the order of the
-  supplied wire bytes. Because the same bytes are written verbatim to every channel, all targeted
-  channels MUST share the **same** color order (not merely a matching component count).
+- For broadcast, any targeted channel's configured color order is not compatible with the supplied
+  wire bytes. Because the same bytes are written verbatim to every channel, all targeted channels
+  MUST share compatible color orders (not merely a matching component count).
 
 Any rejected `Fill Channel` message MUST be rejected atomically; no channel's buffer may be
 modified as a result of a rejected message.
@@ -490,47 +397,23 @@ channels to be updated at independent frame rates.
 **Response**: Emits [`SHOW_ACK`](#show_ack-0xd0) after LED transmission completes if
 `TxID ≠ 0x0000`; no response if `TxID = 0x0000`. Emits [`ERROR`](#error-0xe0) on failure
 regardless of `TxID`. Hosts that use a non-zero `TxID` for `Show` and wait for `SHOW_ACK` before
-issuing the next `Show` are guaranteed never to receive `ERR_BUSY`.
-
-For streaming, `Show` SHOULD use a **non-zero** `TxID`: its `SHOW_ACK` is the pacing and
-buffer-credit signal that [frame pipelining](#frame-pipelining) depends on. This differs from
-`Set Pixels` and `Fill Channel`, which are normally fire-and-forget (`TxID = 0x0000`). A `Show` sent
-with `TxID = 0x0000` opts out of acknowledgement entirely, so it is appropriate only for deliberately
-lossy, non-pipelined output where dropped frames and the loss of buffer-safety guarantees are
-acceptable.
+issuing the next `Show` are guaranteed never to receive `ERR_BUSY`. For high-throughput streaming,
+`TxID = 0x0000` is recommended to avoid ACK overhead.
 
 ### Frame Pipelining
 
-Frame transmission on **WS281x** LEDs takes a fixed, comparatively long time. At 800 kHz each LED
-takes `bits_per_LED × 1.25 µs`, i.e. about `LED_count × 30 µs` per channel for RGB (24 bits) or
-`LED_count × 40 µs` for RGBW (32 bits), plus the inter-frame reset period of the configured
-[signaling profile](#configure-device-0x20) (≥ 50 µs, or ≥ 250 µs for WS2813). (At 400 kHz the bit
-period is 2.5 µs, so the per-LED figures double.) A host that waits for
+Frame transmission on **WS281x** LEDs takes a fixed, comparatively long time — roughly
+`LED_count × 1.25 µs` per channel plus a minimum 300 µs inter-frame reset. A host that waits for
 `SHOW_ACK` before issuing the next `Show` (the lock-step pattern above) leaves the device idle for
 one host round-trip at every frame boundary, because the device cannot begin the next frame until a
 new `Show` arrives. Frame pipelining removes that idle gap by letting the host queue the next `Show`
 while the current frame is still transmitting.
 
-**Frame pipelining is a mandatory part of Opalinx.** Every conformant device supports a one-deep `Show`
+**Frame pipelining is a mandatory part of OPAL.** Every conformant device supports a one-deep `Show`
 queue, so a host can always pipeline without negotiating a capability first — pipelining is never
 rejected and is never slower than lock-step. This universality is deliberate: it lets host libraries
 keep the transmission pipe full by default rather than treating high throughput as an optional
 extra.
-
-In Opalinx 1.0 the pipeline is exactly one-deep: a device reports `max_in_flight_frames` = 2 (one
-transmitting plus one queued) in its [`INFO`](#info-0x81) response, and a host pipelines no more than
-one `Show` ahead. This depth is a direct consequence of the buffer model: a queued frame's channel
-buffers are sampled only when it begins transmitting (see below), so at most one *unsampled* frame
-can exist in the single staging buffer at a time. Queuing a second unsampled frame would require its
-pixel data to coexist with the first's — impossible without additional per-frame buffers, snapshots,
-or frame handles, which this revision does not define.
-
-Deeper pipelines are therefore **out of scope for Opalinx 1.0**: `max_in_flight_frames` MUST be exactly
-`2` and a host MUST NOT keep more than one `Show` queued ahead of the transmitting frame (two `Show`
-operations outstanding at most), regardless of any reserved capability bits. Enabling a deeper queue
-requires snapshot-at-`Show` semantics (or equivalent per-frame buffer
-handles) that a future revision may define; until then a host gains nothing by attempting it and
-would race the device's single staging buffer.
 
 **Device behavior (mandatory).** Every conformant device MUST tolerate exactly one queued broadcast
 `Show`:
@@ -566,11 +449,9 @@ and are safe to overwrite. This rule bounds the host to a single queued `Show` a
 acknowledgement round-trip off the critical path, since the next `Show` is already waiting in the
 device when the current frame finishes.
 
-During streaming the pixel traffic stays fire-and-forget: `Set Pixels` and `Fill Channel` use
-`TxID = 0x0000` and go unacknowledged, so only the frame-boundary `Show` carries a non-zero `TxID`.
-(Outside the streaming hot path these writes MAY instead carry a non-zero `TxID` for an acknowledged
-one-shot or lock-step write — see their `ACK` responses — but the pipeline does not.) That single
-lightweight `SHOW_ACK` per frame is the host's pacing and buffer-safety signal. A lagging
+The pixel traffic itself stays fire-and-forget: `Set Pixels` and `Fill Channel` use `TxID = 0x0000`
+and are never acknowledged. Only the frame-boundary `Show` carries a non-zero `TxID`; that single
+lightweight acknowledgement per frame is the host's pacing and buffer-safety signal. A lagging
 `SHOW_ACK` stream is therefore the backpressure signal: if acknowledgements fall behind, the host is
 outrunning the device and MUST stop queuing further `Show` messages until the outstanding
 acknowledgement arrives, rather than risk `ERR_BUSY`.
@@ -604,18 +485,15 @@ Sent in response to [`Request Device Information`](#request-device-information-0
 
 | Field                   | Size     | Description                                                 |
 |-------------------------|----------|-------------------------------------------------------------|
-| Protocol version major  | 1 byte   | Major version of the **Opalinx** protocol                      |
-| Protocol version minor  | 1 byte   | Minor version of the **Opalinx** protocol                      |
-| Protocol version patch  | 1 byte   | Patch version of the **Opalinx** protocol                      |
+| Protocol version major  | 1 byte   | Major version of the **OPAL** protocol                      |
+| Protocol version minor  | 1 byte   | Minor version of the **OPAL** protocol                      |
+| Protocol version patch  | 1 byte   | Patch version of the **OPAL** protocol                      |
 | Channel count           | 1 byte   | Number of LED channels (`N`) supported by the device        |
 | Capability flags        | 4 bytes  | Bitfield, little-endian; see capability bits below          |
 | Firmware version major  | 1 byte   | Device firmware major version                               |
 | Firmware version minor  | 1 byte   | Device firmware minor version                               |
 | Firmware version patch  | 1 byte   | Device firmware patch version                               |
 | Max payload length      | 2 bytes  | Max accepted payload, in bytes, little-endian; MUST be ≥ 4101 |
-| Max in-flight frames    | 1 byte   | Depth of the `Show` pipeline; MUST be `2` in Opalinx 1.0        |
-| Max LEDs (RGB)          | 2 bytes  | Max LEDs per channel in a 3-component order, little-endian; `0` = not advertised |
-| Max LEDs (RGBW)         | 2 bytes  | Max LEDs per channel in a 4-component order, little-endian; `0` = not advertised |
 | Device name length      | 1 byte   | Length in bytes of the following UTF-8 string               |
 | Device name             | variable | UTF-8 encoded, not null-terminated                          |
 | Hardware revision length | 1 byte  | Length in bytes of the following UTF-8 string (`1`–`63`)    |
@@ -623,26 +501,7 @@ Sent in response to [`Request Device Information`](#request-device-information-0
 | Hardware platform length | 1 byte  | Length in bytes of the following UTF-8 string (`1`–`63`)    |
 | Hardware platform       | variable | Processor, module, or execution platform used by the device |
 | Transport length        | 1 byte   | Length in bytes of the following UTF-8 identifier (`1`–`63`) |
-| Transport               | variable | Active transport carrying this Opalinx connection              |
-
-`max_in_flight_frames` reports how many `Show` operations the device accepts before it must
-reject further ones with `ERR_BUSY` — one actively transmitting plus `max_in_flight_frames − 1`
-queued. In Opalinx 1.0 a device MUST report exactly `2` (see [Frame Pipelining](#frame-pipelining) for
-why the single-staging-buffer model bounds the depth at 2). A host MUST decode and MAY expose the
-reported value, but MUST reject a device advertising any value other than `2` as incompatible during
-handshake/compatibility validation, rather than driving it at a depth it did not advertise — a device
-that genuinely supports only one outstanding `Show` would otherwise earn predictable `ERR_BUSY`
-failures and unsafe buffer assumptions. The field is kept in the layout so a future revision can
-widen it once it defines the buffer semantics a deeper queue needs.
-
-`max_leds_rgb` and `max_leds_rgbw` report the largest LED count the device accepts for a single
-channel configured with a 3- and 4-component color order, respectively. These are not derivable
-from `max_payload_length`: a device MAY buffer a full channel across many `Set Pixels` messages,
-so its per-channel capacity can exceed what one payload carries. A value of `0` means the device
-does not advertise a per-channel limit for that component count. The host MUST NOT infer one from
-`max_payload_length` — that field bounds a single `Set Pixels` message, not a channel's total
-capacity. Instead the host SHOULD attempt to `Configure` the desired LED count and rely on the device
-rejecting an over-capacity request with `ERR_INVALID_PARAMETER`.
+| Transport               | variable | Active transport carrying this OPAL connection              |
 
 A `device_name_length` of `0` is valid and indicates the device has no name; in this case the
 `device_name` field is absent and `hardware_revision_length` immediately follows
@@ -658,8 +517,8 @@ the controller firmware runs. Examples include `ESP32-P4`, `Teensy 4.1`, and `RP
 informational and does not imply particular capabilities; clients MUST accept and expose unknown
 values. When a device cannot determine its platform, it MUST report `unknown`.
 
-The `transport` field identifies the active transport carrying the current Opalinx connection. It
-does not identify intermediate adapters: a controller receiving Opalinx through a UART reports
+The `transport` field identifies the active transport carrying the current OPAL connection. It
+does not identify intermediate adapters: a controller receiving OPAL through a UART reports
 `uart`, even when the host reaches that UART through a USB-to-UART bridge. Standard transport
 identifiers are lowercase ASCII:
 
@@ -689,12 +548,9 @@ other diagnostic details.
 
 Clients MUST ignore unknown capability bits to remain forward-compatible.
 
-The mandatory one-deep `Show` queue is **not** a capability bit: every conformant device supports it
-(see [Frame Pipelining](#frame-pipelining)), so hosts pipeline to depth 2 unconditionally with
-nothing to advertise or negotiate. Bit 3 is reserved for a future `Show`-queue-depth capability:
-Opalinx 1.0 fixes the depth at 2 (see [Frame Pipelining](#frame-pipelining)) because a deeper queue
-needs snapshot-at-`Show` buffer semantics this revision does not define. Until such a revision
-exists, senders MUST leave bit 3 clear and receivers MUST ignore it.
+Frame pipelining is **not** a capability bit: every conformant device supports a one-deep `Show`
+queue (see [Frame Pipelining](#frame-pipelining)), so hosts pipeline unconditionally and there is
+nothing to advertise or negotiate.
 
 ### CONFIG (`0x82`, `0xA0`)
 
@@ -738,7 +594,7 @@ confirming that the pixel data has been buffered.
 
 ### FILL_CHANNEL_ACK (`0xC1`)
 
-Sent in response to a successful [`Fill Channel`](#fill-channel-0x41) request with `TxID ≠ 0x0000`,
+Sent in response to a successful [`Fill Channel`](#fill-channel-0x41) request with `TxID ≠ 0x0000`, 
 confirming that the fill has been buffered.
 
 | TRANSACTION ID | IDENTIFIER | PAYLOAD LENGTH | CHECKSUM |
@@ -784,14 +640,13 @@ an `ERROR` response.
 |---------------|------------------------------|---------------------------------------------------|
 | `0x00`        | `ERR_UNSPECIFIED`            | Generic error                                     |
 | `0x01`        | `ERR_UNKNOWN_IDENTIFIER`     | Identifier byte not recognized                    |
-| `0x02`        | `ERR_INVALID_PAYLOAD_LENGTH` | Declared/decoded length mismatch, or payload length ≠ message's expected size |
+| `0x02`        | `ERR_INVALID_PAYLOAD_LENGTH` | Payload length ≠ message's expected size          |
 | `0x03`        | `ERR_CRC_MISMATCH`           | CRC-16 validation failed                          |
 | `0x04`        | `ERR_INVALID_PARAMETER`      | A parameter value is out of range                 |
 | `0x05`        | `ERR_BUSY`                   | Device cannot accept the message at this time     |
 | `0x06`        | `ERR_UNSUPPORTED`            | Message valid but unsupported by this device      |
 | `0x07`        | `ERR_FRAMING_ERROR`          | COBS decoding failed; frame is malformed          |
-| `0x08`        | `ERR_DEVICE_FAULT`           | Device-side failure; the request could not be carried out |
-| `0x09`–`0x7F` | Reserved                     | Reserved for future specification versions        |
+| `0x08`–`0x7F` | Reserved                     | Reserved for future specification versions        |
 | `0x80`–`0xFF` | Vendor-specific              | Available for vendor-specific error codes         |
 
 Devices SHOULD emit the most specific applicable error code. `ERR_UNSPECIFIED` is reserved for
@@ -805,52 +660,14 @@ the LEDs:
   the full one-deep queue semantics.
 - A `Reset` request MUST be rejected with `ERR_BUSY`. `Reset` is a management command, not a
   streaming operation, and is not queued.
-- `Set Pixels` and `Fill Channel` messages MUST be accepted during active transmission when no `Show`
-  is queued. The transmitting frame occupies the output buffer, leaving the staging buffer free for
-  the next frame — this is exactly how a pipelining host uploads frame *N+1* while frame *N*
-  transmits, so rejecting these here would break the default pipeline. A device MAY reject them with
-  `ERR_BUSY` **only** while a `Show` is queued, to protect the queued frame's not-yet-sampled buffers
-  (see [Frame Pipelining](#frame-pipelining)).
-- A `Configure Device` message MAY be rejected with `ERR_BUSY` during active transmission or while a
-  `Show` is queued: reconfiguring clears channel buffers and would disturb the in-flight or queued
-  frame.
+- Devices MAY reject `Set Pixels`, `Fill Channel`, or `Configure Device` messages with `ERR_BUSY`
+  during active transmission, and MAY do so while a `Show` is queued to protect the queued frame's
+  buffers (see [Frame Pipelining](#frame-pipelining)).
 
-`ERR_DEVICE_FAULT` reports a device-side failure that prevents an otherwise-valid request from being
-carried out — for example, the device cannot allocate or initialize the resources a requested
-configuration needs, or it is not currently operational:
+When `ERR_FRAMING_ERROR` is emitted, the transaction ID in the response MUST be `0x0000` and the
+offending identifier MUST be `0x00`, as neither could be recovered from the malformed frame.
 
-- A device MUST NOT respond to `Configure Device` with a successful `CONFIG_SET` if it cannot apply
-  the requested configuration. When the parameters are valid but the device fails to bring the
-  configuration into service, it MUST respond with `ERROR` and `ERR_DEVICE_FAULT`, MUST NOT leave a
-  partially-applied configuration in service, and then, per the `Configure Device` atomicity rule:
-  - **Configuration and operational state — MUST restore.** After an ordinary
-    allocation/configuration failure, the device MUST leave its previous configuration's parameters
-    and operational state unmodified; a device that had a working configuration remains operational on
-    it. The sole exception is when there is no prior working configuration to fall back to (for
-    example, a failed *first* configuration after power-on), in which case the device becomes not
-    operational.
-  - **Buffered pixels — MAY clear.** The device SHOULD preserve the previous configuration's buffered
-    pixel contents so a subsequent `Show` reproduces the prior frame (the reference firmware attempts
-    this), but it MAY clear them — for instance when restoring the prior configuration under memory
-    pressure requires releasing the pixel snapshot. A host MUST re-send pixels before its next `Show`
-    regardless, so buffer loss is not observable to a correct host. (A *successful* `Configure` always
-    clears the buffers.)
-  - **Unrecoverable hardware failure — documented exception.** If an independent, unrecoverable
-    hardware failure prevents even restoring the prior configuration, the device MAY be left not
-    operational; it MUST then report `ERR_DEVICE_FAULT` and reject subsequent pixel/`Show` operations
-    with `ERR_DEVICE_FAULT` until it is successfully reconfigured.
-- While a device is not operational — for example after a failed initial `Configure Device` with no
-  prior working configuration to fall back to, or before any successful configuration — it SHOULD
-  reject `Set Pixels`, `Fill Channel`, and `Show` with `ERR_DEVICE_FAULT` rather than silently
-  discarding data it will not display or acknowledging a frame it never transmitted.
-
-After a frame passes CRC and identifier validation, a mismatch between its declared payload length
-and its decoded size MUST produce `ERR_INVALID_PAYLOAD_LENGTH`, echoing the recovered transaction ID
-and offending identifier. `ERR_FRAMING_ERROR` is reserved for COBS decoding failures and decoded
-frames shorter than the seven-byte minimum. When it is emitted, the transaction ID in the response
-MUST be `0x0000` and the offending identifier MUST be `0x00`, as neither can be trusted.
-
-**Opalinx** 1.0 uses the transaction ID echoed in every response — including `ERROR` responses — to
+**OPAL** 1.0 uses the transaction ID echoed in every response — including `ERROR` responses — to
 correlate device replies with host requests.
 
 
@@ -875,7 +692,7 @@ into a single `Set Pixels` with channel `255`.
 
 ## Transport Bindings
 
-**Opalinx** 1.0 is defined for reliable, ordered byte streams. The core **Opalinx** frame format is
+**OPAL** 1.0 is defined for reliable, ordered byte streams. The core **OPAL** frame format is
 transport-agnostic, but it assumes the underlying transport delivers bytes in order and without
 loss.
 
@@ -884,17 +701,17 @@ UART, TCP, and Bluetooth RFCOMM/SPP.
 
 Common transport bindings:
 
-- **USB serial / UART**: **Opalinx** frames are sent as a raw byte stream. COBS encoding plus `0x00`
+- **USB serial / UART**: **OPAL** frames are sent as a raw byte stream. COBS encoding plus `0x00`
   delimiter applies directly.
-- **TCP / Ethernet over TCP**: **Opalinx** frames may be transported unchanged over the TCP stream.
+- **TCP / Ethernet over TCP**: **OPAL** frames may be transported unchanged over the TCP stream.
   TCP already provides reliability and ordering.
-- **Bluetooth RFCOMM / SPP**: These transports also present a stream abstraction, so **Opalinx**
+- **Bluetooth RFCOMM / SPP**: These transports also present a stream abstraction, so **OPAL** 
   framing applies directly.
 - **Bluetooth LE (GATT)**: This is not a true byte stream; implementations MUST reassemble
-  characteristic writes and notifications into a reliable ordered stream before decoding **Opalinx**
+  characteristic writes and notifications into a reliable ordered stream before decoding **OPAL**
   frames.
-- **UDP**: **Opalinx** does not assume an unordered, lossy packet transport. If UDP is used, each
-  datagram MUST carry a complete **Opalinx** frame and the binding MUST document loss, retransmission,
+- **UDP**: **OPAL** does not assume an unordered, lossy packet transport. If UDP is used, each
+  datagram MUST carry a complete **OPAL** frame and the binding MUST document loss, retransmission,
   and ordering behavior separately.
 
 Implementations targeting non-stream transports MUST provide a transport binding that preserves
@@ -906,22 +723,13 @@ of critical control and configuration messages. The protocol itself provides no 
 retransmission mechanism; all reliability beyond the transport layer MUST be implemented by the
 host application.
 
-### Timeouts
-
-Hosts MUST implement a timeout when waiting for a response to messages that always
+**Timeouts**: Hosts MUST implement a timeout when waiting for a response to messages that always
 produce one (`Request Device Information`, `Request Device Configuration`, `Configure Device`,
 and `Ping`). A suggested timeout is 1 second over USB serial; timeouts may be adjusted per
 transport (e.g., longer for high-latency links like Bluetooth LE). When waiting for `SHOW_ACK` or
 `RESET_ACK`, hosts MUST use the LED transmission time as the timeout basis rather than a fixed
-duration. At 800 kHz, transmitting one frame takes approximately `LED_count × 30 µs` per channel for
-RGB (24 bits × 1.25 µs) or `LED_count × 40 µs` for RGBW (32 bits), plus the inter-frame reset and
-transport latency; at 400 kHz these per-LED figures double. The signaling profiles require a reset of
-only ≥ 50 µs (≥ 250 µs for WS2813), but because a timeout should err long, a host MAY budget a
-conservative allowance such as 300 µs rather than the protocol minimum. When
-[pipelining](#frame-pipelining), a `SHOW_ACK` is emitted only after the acknowledged frame's queued
-successor has been committed, so a queued `Show`'s acknowledgement can be delayed by up to roughly
-**two** frame durations. Hosts MUST size a pipelined `Show`'s timeout for its position in the queue,
-not for a single frame.
+duration; at 800 kHz, transmission takes approximately `LED_count × 1.25 µs` per channel plus a
+minimum 300 µs inter-frame reset, plus transport latency.
 
 Future versions may define additional transport bindings for other reliable or packet-based
 transports.
@@ -929,10 +737,10 @@ transports.
 
 ## Conformance
 
-An implementation is considered **Opalinx** 1.0 conformant if it:
+An implementation is considered **OPAL** 1.0 conformant if it:
 
 - Accepts all request messages defined in this specification with the framing described.
-- Validates the COBS frame, `0x00` delimiter, identifier range, payload length, and CRC-16 on every
+- Validates the COBS frame, `0x00` delimiter, identifier range, payload length, and CRC-16 on every 
   received message, and rejects any message with an invalid CRC with `ERR_CRC_MISMATCH`.
 - Rejects malformed messages by emitting an appropriate `ERROR` response without affecting the
   state of prior valid messages.
@@ -951,7 +759,7 @@ An implementation is considered **Opalinx** 1.0 conformant if it:
   operations received with `TxID ≠ 0x0000`.
 - Ignores unknown capability flags and reserved fields per the [Conventions](#conventions)
   section.
-- Honors the `0x70`–`0x7F` and `0xF0`–`0xFF` vendor-specific identifier ranges by either
+- Honors the `0x70`–`0x7F` and `0xF0`–`0xFF` vendor-specific identifier ranges by either 
   implementing them or rejecting them cleanly with `ERR_UNKNOWN_IDENTIFIER`.
 
 Implementations MAY add vendor-specific requests in the `0x70`–`0x7F` range and vendor-specific
@@ -961,7 +769,7 @@ recognize SHOULD ignore them.
 
 ## Security Considerations
 
-**Opalinx** 1.0 provides no authentication, authorization, or encryption. It assumes the underlying
+**OPAL** 1.0 provides no authentication, authorization, or encryption. It assumes the underlying
 transport is trusted.
 
 For USB serial connections this assumption is reasonable: physical access to the host is required
@@ -969,58 +777,58 @@ to open the port, which implies the ability to control any connected device.
 
 For network transports (TCP, Bluetooth RFCOMM/SPP), the assumption does not hold automatically.
 Any endpoint that can reach the device's network address or Bluetooth service can send arbitrary
-**Opalinx** commands — configuring channels, overwriting pixel buffers, and issuing resets — without
+**OPAL** commands — configuring channels, overwriting pixel buffers, and issuing resets — without
 any credential. Deployments using these transports MUST secure the transport layer externally
 (e.g., TLS for TCP, authenticated pairing for Bluetooth) or restrict access at the network or
-OS level before exposing an **Opalinx** device.
+OS level before exposing an **OPAL** device.
 
 The CRC-16 checksum detects accidental bit errors in transit; it does not provide tamper
 protection. An attacker with the ability to modify frames in transit can recompute a valid CRC
-over altered data. **Opalinx** offers no mechanism to detect or prevent deliberate tampering.
+over altered data. **OPAL** offers no mechanism to detect or prevent deliberate tampering.
 
 
 ## Specification Governance
 
-**Opalinx** is a centrally governed protocol. The author and maintainer of this repository is the sole
-authority for publishing official versions of the **Opalinx** specification.
+**OPAL** is a centrally governed protocol. The author and maintainer of this repository is the sole 
+authority for publishing official versions of the **OPAL** specification.
 
 Proposed changes, clarifications, and extensions may be submitted for discussion, but only versions
-published by the official **Opalinx** repository are considered authoritative.
+published by the official **OPAL** repository are considered authoritative.
 
 
 ## License Summary
 
-Opalinx is free to implement in software. You may create, distribute, sell, or commercially license
+OPAL is free to implement in software. You may create, distribute, sell, or commercially license 
 software libraries, host applications, plugins, tools, test suites, tutorials, and integrations that
-communicate with Opalinx-compatible devices.
+communicate with OPAL-compatible devices.
 
-You may also implement Opalinx in hardware or firmware for personal, educational, artistic, research,
+You may also implement OPAL in hardware or firmware for personal, educational, artistic, research, 
 prototyping, and other non-commercial uses.
 
-A separate commercial license is required to manufacture, sell, distribute, bundle, lease, rent,
-market, or otherwise commercialize hardware devices, firmware products, kits, modules, or
-installation systems that implement Opalinx or advertise Opalinx compatibility.
+A separate commercial license is required to manufacture, sell, distribute, bundle, lease, rent, 
+market, or otherwise commercialize hardware devices, firmware products, kits, modules, or 
+installation systems that implement OPAL or advertise OPAL compatibility.
 
 In short:
 
-- commercial Opalinx software is allowed;
-- non-commercial Opalinx hardware experimentation is allowed;
-- commercial Opalinx-compatible devices require a license;
-- the official Opalinx specification remains under the authority of Jean-Philippe
-  Cô.
+- commercial OPAL software is allowed;
+- non-commercial OPAL hardware experimentation is allowed;
+- commercial OPAL-compatible devices require a license;
+- the official OPAL specification remains under the authority of Jean-Philippe
+  Côté.
 
 See [`LICENSE.md`](LICENSE.md) for the full legal text.
 
 
 ## Name Usage
 
-The name "**Opalinx**" refers exclusively to the protocol defined by the canonical specification.
+The name "**OPAL**" refers exclusively to the protocol defined by the canonical specification.
 
-Modified, extended, or incompatible protocols must not be described as **Opalinx** or
-**Opalinx**-compatible.
+Modified, extended, or incompatible protocols must not be described as **OPAL** or 
+**OPAL**-compatible.
 
-The name "**Opalinx**" may only be used to refer to implementations or documents that conform to the
-official **Opalinx** specification published by the author.
+The name "**OPAL**" may only be used to refer to implementations or documents that conform to the 
+official **OPAL** specification published by the author. 
 
 
 ## Contributing
@@ -1031,4 +839,4 @@ to discuss changes before submitting pull requests against the specification tex
 
 ## Author
 
-Opalinx was designed and authored by [Jean-Philippe Cô](https://djip.co), 2026.
+OPAL was designed and authored by [Jean-Philippe Cô](https://djip.co), 2026.
