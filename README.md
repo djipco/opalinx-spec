@@ -36,8 +36,23 @@ separate binding and are not core Opalinx 1.0 transports.
 
 - **Strings**: UTF-8 encoded with a length prefix, not null-terminated.
 
-- **Reserved fields and bits**: Senders MUST set them to zero; receivers MUST ignore their
-  contents.
+- **Reserved and unassigned values**: There is no blanket "ignore reserved data" rule. The field or
+  container definition determines whether an unknown value is ignored, preserved, or rejected. The
+  common cases are:
+
+  | Category | Sender rule | Receiver rule |
+  |----------|-------------|---------------|
+  | Reserved bits in an explicitly extensible bitfield | Send zero | Ignore unknown bits |
+  | Unassigned value in a request enum | Do not send | Reject with `ERR_INVALID_PARAMETER` |
+  | Assigned but unsupported request value | Send only after discovery or probing | Reject with `ERR_UNSUPPORTED` |
+  | Reserved request/response identifier | Do not send | Apply the identifier/direction rules |
+  | Reserved structural sentinel, such as INFO type `0x00` | Do not send | Treat as malformed |
+  | Unknown length-delimited extension | Send only when assigned | Skip by its declared length |
+  | Unknown value in a forward-readable response enum | Allowed for newer senders | Preserve numerically |
+
+  A future definition that introduces a reserved byte or multi-byte field MUST state its sender and
+  receiver behavior explicitly. Merely labeling a field "reserved" does not authorize a receiver to
+  ignore nonzero contents.
 
 - **Versioning**: Protocol-version compatibility follows the wire-specific rules in
   [Protocol Version Compatibility](#protocol-version-compatibility). Package and firmware release
@@ -1003,6 +1018,8 @@ an error-response loop.
 
 Devices SHOULD emit the most specific applicable error code. `ERR_UNSPECIFIED` is reserved for
 conditions not covered by any other code and SHOULD NOT be used when a more specific code applies.
+Hosts MUST accept and expose an unknown error code numerically; an unknown code does not make the
+otherwise well-formed `ERROR` response malformed.
 
 `ERR_BUSY` governs messages that arrive while the device is still transmitting a previous frame to
 the LEDs:
@@ -1198,8 +1215,8 @@ An implementation is considered **Opalinx** 1.0 conformant if it:
   guarantees defined in [Frame Pipelining](#frame-pipelining).
 - Sends `SET_PIXELS_ACK`, `FILL_CHANNEL_ACK`, and `SHOW_ACK` responses for pixel and show
   operations received with `TxID ≠ 0x0000`.
-- Ignores unknown capability flags and reserved fields per the [Conventions](#conventions)
-  section.
+- Applies the field-specific unknown, reserved, and extension handling rules in
+  [Conventions](#conventions).
 - Recognizes the namespaced vendor envelope and returns `ERR_UNSUPPORTED` for an unimplemented
   namespace or command.
 - Honors private vendor identifier ranges by either implementing them or rejecting them cleanly
