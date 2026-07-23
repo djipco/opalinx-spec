@@ -924,24 +924,20 @@ by the official **Opalinx** repository are considered authoritative.
 
 ## License Summary
 
-Opalinx is free to implement in software. You may create, distribute, sell, or commercially license
-software libraries, host applications, plugins, tools, test suites, tutorials, and integrations that
-communicate with Opalinx-compatible devices.
+The Opalinx specification is publicly available. It may be read, quoted, referenced, and shared
+unmodified without charge. Noncommercial Opalinx implementations are also permitted without charge.
 
-You may also implement Opalinx in hardware or firmware for personal, educational, artistic, research,
-prototyping, and other non-commercial uses.
-
-A separate commercial license is required to manufacture, sell, distribute, bundle, lease, rent,
-market, or otherwise commercialize hardware devices, firmware products, kits, modules, or
-installation systems that implement Opalinx or advertise Opalinx compatibility.
+A separate written commercial license is required to receive monetary compensation specifically for
+a device, firmware, software product, service, or paid integration that implements Opalinx or offers
+Opalinx compatibility as a material feature. Ordinary internal business use and unrelated paid work
+in which Opalinx is merely incidental are not Commercial Use.
 
 In short:
 
-- commercial Opalinx software is allowed;
-- non-commercial Opalinx hardware experimentation is allowed;
-- commercial Opalinx-compatible devices require a license;
-- the official Opalinx specification remains under the authority of Jean-Philippe
-  Côté.
+- the specification is free to read and share without charge;
+- noncommercial implementations are permitted;
+- direct commercial exploitation of Opalinx requires a separate written license;
+- commercial terms, including any fees or royalties, are agreed separately.
 
 See [`LICENSE.md`](LICENSE.md) for the full legal text.
 
