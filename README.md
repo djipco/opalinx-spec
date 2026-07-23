@@ -837,11 +837,6 @@ The fixed 32-bit field holds foundational capabilities that are useful to nearly
 future specification needs another capability mechanism, it can assign a new INFO record without
 changing the fixed prefix.
 
-The mandatory one-Show backlog is **not** a capability bit or INFO field. Every conformant device
-supports one actively transmitting plus one pending `Show` as part of the base contract (see
-[Frame Pipelining](#frame-pipelining)). A future advanced streaming model is a separate additive
-feature and does not alter these messages.
-
 ### CONFIG (`0x82`, `0xA0`)
 
 Sent in response to [`Request Device Configuration`](#request-device-configuration-0x02)
