@@ -268,7 +268,7 @@ Messages are grouped by purpose. The high bit of the identifier byte distinguish
 | `0x40` – `0x4F` | Pixel data operations                                      |
 | `0x50` – `0x5F` | Control operations (show, reset)                           |
 | `0x60` – `0x6F` | Reserved (mirrors `0xE0`–`0xEF`; MUST NOT be assigned)     |
-| `0x70` – `0x7E` | Private vendor-specific requests                            |
+| `0x70` – `0x7E` | Reserved                                                   |
 | `0x7F`          | Standard namespaced vendor request envelope                 |
 
 ### Responses (`0x80`–`0xFF`)
@@ -283,7 +283,7 @@ Messages are grouped by purpose. The high bit of the identifier byte distinguish
 | `0xC0` – `0xCF` | Pixel data responses                                       |
 | `0xD0` – `0xDF` | Control responses                                          |
 | `0xE0` – `0xEF` | Errors                                                     |
-| `0xF0` – `0xFE` | Private vendor-specific responses                           |
+| `0xF0` – `0xFE` | Reserved                                                   |
 | `0xFF`          | Standard namespaced vendor response envelope                |
 
 **Response pairing convention.** The success response identifier for a given request is the
@@ -689,9 +689,8 @@ envelope structure produces `ERR_INVALID_PAYLOAD_LENGTH`; an invalid namespace p
 success nor failure produces a response. A vendor contract requiring confirmation MUST forbid
 fire-and-forget use and require a nonzero transaction ID.
 
-Private identifiers `0x70`–`0x7E` remain available when both endpoints are coordinated as one closed
-system. They are not collision-free and MUST NOT be used for a reusable or independently published
-extension; such extensions MUST use this envelope.
+All vendor-defined requests use this envelope. The reserved request and response ranges MUST NOT be
+used as private extension points.
 
 ## Response Messages
 
@@ -779,7 +778,7 @@ Type assignments are divided into these ranges:
 | `0x07`          | Extended capability identifiers                                |
 | `0x08`–`0x7E`   | Standard records assigned by future Opalinx specifications    |
 | `0x7F`          | Standard namespaced vendor-information envelope               |
-| `0x80`–`0xFF`   | Private vendor records for coordinated closed systems         |
+| `0x80`–`0xFF`   | Reserved for future specification versions                    |
 
 The outer INFO payload length terminates the extension area; no end marker or padding is permitted.
 Every record, including an unknown record, MUST fit completely within that payload. A truncated TLV
@@ -1161,12 +1160,7 @@ An implementation is considered **Opalinx** 1.0 conformant if it:
   [Conventions](#conventions).
 - Recognizes the namespaced vendor envelope and returns `ERR_UNSUPPORTED` for an unimplemented
   namespace or command.
-- Honors private vendor identifier ranges by either implementing them or rejecting them cleanly
-  with `ERR_UNKNOWN_IDENTIFIER`.
-
-Implementations MAY add private requests in `0x70`–`0x7E` and paired responses in `0xF0`–`0xFE` for
-closed systems. Independently published extensions use `0x7F`/`0xFF`. Clients encountering private
-vendor messages they do not recognize SHOULD ignore them.
+- Rejects identifiers in reserved request ranges with `ERR_UNKNOWN_IDENTIFIER`.
 
 
 ## Security Considerations
