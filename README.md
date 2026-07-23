@@ -4,8 +4,8 @@
 > [!WARNING]
 > **Opalinx 1.0 is a Draft.** The `1.0.0` number is the target wire contract, but the specification is
 > still being stabilized and breaking changes may occur before it is frozen. Implementations remain
-> pre-1.0 until then; see [`../VERSIONING.md`](../VERSIONING.md) for how the protocol, firmware, and
-> library versions relate.
+> on independent prerelease version lines until then. Protocol, firmware, and library versions are
+> independent; a change to one does not imply a version change to the others.
 
 **Opalinx** is a lightweight binary protocol that allows interfacing with compatible LED controllers
 over a reliable byte stream (typically, serial over USB).
