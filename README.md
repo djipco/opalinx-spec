@@ -415,6 +415,12 @@ rejected and is never slower than lock-step. This universality is deliberate: it
 keep the transmission pipe full by default rather than treating high throughput as an optional
 extra.
 
+In OPAL 1.0 the pipeline depth is exactly `2`: one actively transmitting `Show` plus one queued
+`Show`. A device MUST report `max_in_flight_frames = 2` in its [`INFO`](#info-0x81) response, and a
+host MUST reject any other reported value as incompatible. Whether pipeline depth should remain an
+advertised field in a later draft revision is intentionally separate from the OPAL 1.0 wire-layout
+requirement defined here.
+
 **Device behavior (mandatory).** Every conformant device MUST tolerate exactly one queued broadcast
 `Show`:
 
@@ -494,6 +500,9 @@ Sent in response to [`Request Device Information`](#request-device-information-0
 | Firmware version minor  | 1 byte   | Device firmware minor version                               |
 | Firmware version patch  | 1 byte   | Device firmware patch version                               |
 | Max payload length      | 2 bytes  | Max accepted payload, in bytes, little-endian; MUST be ≥ 4101 |
+| Max in-flight frames    | 1 byte   | Number of outstanding `Show` operations accepted; MUST be `2` in OPAL 1.0 |
+| Max LEDs (RGB)          | 2 bytes  | Max LEDs per channel in a 3-component order, little-endian; `0` = not advertised |
+| Max LEDs (RGBW)         | 2 bytes  | Max LEDs per channel in a 4-component order, little-endian; `0` = not advertised |
 | Device name length      | 1 byte   | Length in bytes of the following UTF-8 string               |
 | Device name             | variable | UTF-8 encoded, not null-terminated                          |
 | Hardware revision length | 1 byte  | Length in bytes of the following UTF-8 string (`1`–`63`)    |
@@ -502,6 +511,22 @@ Sent in response to [`Request Device Information`](#request-device-information-0
 | Hardware platform       | variable | Processor, module, or execution platform used by the device |
 | Transport length        | 1 byte   | Length in bytes of the following UTF-8 identifier (`1`–`63`) |
 | Transport               | variable | Active transport carrying this OPAL connection              |
+
+`max_in_flight_frames` reports the total number of `Show` operations the device accepts before it
+must reject another with `ERR_BUSY`: one actively transmitting plus
+`max_in_flight_frames - 1` queued. In OPAL 1.0 this field MUST be exactly `2`. Hosts MUST decode the
+field and MUST reject a device reporting any other value during compatibility validation. The
+field's presence does not permit a deeper pipeline; deeper-pipeline buffer and acknowledgement
+semantics are outside the scope of OPAL 1.0.
+
+`max_leds_rgb` and `max_leds_rgbw` report the largest LED count the device accepts for one channel
+configured with a 3-component or 4-component color order, respectively. These limits are not
+derivable from `max_payload_length`: a device can buffer a full channel across multiple
+`Set Pixels` messages, so its channel capacity can exceed the number of pixels carried by one
+payload. A value of `0` means that the device does not advertise a limit for that component count.
+Hosts MUST NOT infer a channel limit from `max_payload_length`; when the corresponding advertised
+limit is zero, a host SHOULD attempt the desired `Configure Device` request and handle
+`ERR_INVALID_PARAMETER` if the count exceeds the device's capacity.
 
 A `device_name_length` of `0` is valid and indicates the device has no name; in this case the
 `device_name` field is absent and `hardware_revision_length` immediately follows
@@ -548,9 +573,10 @@ other diagnostic details.
 
 Clients MUST ignore unknown capability bits to remain forward-compatible.
 
-Frame pipelining is **not** a capability bit: every conformant device supports a one-deep `Show`
-queue (see [Frame Pipelining](#frame-pipelining)), so hosts pipeline unconditionally and there is
-nothing to advertise or negotiate.
+The mandatory one-deep `Show` queue is **not** a capability bit. Every conformant device reports
+`max_in_flight_frames = 2` and supports one actively transmitting plus one queued `Show` (see
+[Frame Pipelining](#frame-pipelining)). The field is part of the fixed INFO wire layout, but it does
+not negotiate a different depth in OPAL 1.0.
 
 ### CONFIG (`0x82`, `0xA0`)
 
