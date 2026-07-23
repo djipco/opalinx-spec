@@ -21,8 +21,10 @@ Both 3-component (RGB) and 4-component (RGBW) chips are supported.
 > Two-wire protocols such as **APA102** (DotStar) and **WS2801** are not currently in scope for
 > this specification.
 
-**OPAL** assumes the transport is trusted and delivers bytes in order without loss. It does not 
-define reliability, authentication, network addressing, or fixture personality modeling.
+**OPAL** assumes a trusted, single-client transport binding that presents a reliable, ordered byte
+stream. The core protocol does not define retransmission, duplicate suppression, network addressing,
+authentication, or fixture personality modeling. Packet and unreliable transports require a
+separate binding and are not core OPAL 1.0 transports.
 
 
 ## Conventions
@@ -726,9 +728,7 @@ identifiers are lowercase ASCII:
 | `uart`          | Hardware UART                                  |
 | `usb-cdc`       | USB Communications Device Class serial         |
 | `tcp`           | Transmission Control Protocol                  |
-| `udp`           | User Datagram Protocol                         |
 | `bluetooth-spp` | Bluetooth Serial Port Profile / RFCOMM         |
-| `bluetooth-le`  | Bluetooth Low Energy                           |
 
 Future specifications may define additional identifiers. Vendor-defined transports SHOULD use a
 namespaced identifier such as `vendor.example/custom-link`. Clients MUST accept and expose unknown
@@ -928,41 +928,60 @@ into a single `Set Pixels` with channel `255`.
 
 ## Transport Bindings
 
-**OPAL** 1.0 is defined for reliable, ordered byte streams. The core **OPAL** frame format is
-transport-agnostic, but it assumes the underlying transport delivers bytes in order and without
-loss.
+### Core stream contract
 
-The message framing described in this document applies directly to transports such as USB serial,
-UART, TCP, and Bluetooth RFCOMM/SPP.
+**OPAL** 1.0 is defined over one full-duplex, reliable, ordered byte stream connecting one host to
+one device. A conforming core binding MUST:
 
-Common transport bindings:
+- deliver accepted bytes once, in order, without insertion or duplication;
+- preserve the complete COBS-encoded frame stream, including `0x00` delimiters;
+- provide backpressure, flow control, buffering, or an equivalent mechanism sufficient to prevent
+  routine receive overruns at the binding's documented operating rate;
+- expose connection loss as a transport failure rather than silently reconnecting a new peer into an
+  existing OPAL session;
+- reset partial-frame accumulation at a connection boundary.
 
-- **USB serial / UART**: **OPAL** frames are sent as a raw byte stream. COBS encoding plus `0x00`
-  delimiter applies directly.
-- **TCP / Ethernet over TCP**: **OPAL** frames may be transported unchanged over the TCP stream.
-  TCP already provides reliability and ordering.
-- **Bluetooth RFCOMM / SPP**: These transports also present a stream abstraction, so **OPAL** 
-  framing applies directly.
-- **Bluetooth LE (GATT)**: This is not a true byte stream; implementations MUST reassemble
-  characteristic writes and notifications into a reliable ordered stream before decoding **OPAL**
-  frames.
-- **UDP**: **OPAL** does not assume an unordered, lossy packet transport. If UDP is used, each
-  datagram MUST carry a complete **OPAL** frame and the binding MUST document loss, retransmission,
-  and ordering behavior separately.
+CRC and delimiter recovery detect corruption and restore framing after a fault; they do not make an
+unreliable transport reliable. Loss of a valid fire-and-forget request cannot be recovered by the
+core protocol, and transaction IDs provide correlation rather than retransmission or deduplication.
 
-Implementations targeting non-stream transports MUST provide a transport binding that preserves
-reliability and ordering, or MUST explicitly document the differences and any required recovery
-semantics.
+The following standard identifiers denote direct core-stream bindings:
 
-For unreliable transports, the application layer is responsible for retransmission and validation
-of critical control and configuration messages. The protocol itself provides no built-in
-retransmission mechanism; all reliability beyond the transport layer MUST be implemented by the
-host application.
+- **`usb-cdc`**: OPAL frames are carried unchanged over a USB CDC byte stream.
+- **`uart`**: OPAL frames are carried unchanged over a hardware UART. The implementation MUST choose
+  baud rate, buffering, and hardware/software flow control so the documented operating mode meets the
+  core stream contract. A UART overrun is a transport failure even if the parser later resynchronizes.
+- **`tcp`**: One OPAL session occupies one established TCP connection. Frames are carried unchanged
+  over the connection's byte stream.
+- **`bluetooth-spp`**: Frames are carried unchanged over one Bluetooth RFCOMM/SPP stream.
+
+### Packet and non-stream transports
+
+UDP and Bluetooth LE GATT are not standard OPAL 1.0 core bindings. Merely placing one encoded frame
+in a datagram, characteristic write, or notification does not supply the ordering and reliability
+contract the protocol requires.
+
+A future standard packet binding—or a vendor-defined experimental binding—must define at least:
+
+- mapping between OPAL frames and packets;
+- maximum transmission unit and fragmentation/reassembly;
+- packet and fragment ordering;
+- loss detection, acknowledgement, and retransmission;
+- duplicate detection and suppression, especially for non-idempotent requests;
+- session establishment, peer identity, and reconnection behavior;
+- backpressure and maximum outstanding data;
+- delivery and timeout behavior for responses and unsolicited errors.
+
+Until such a binding is published, an implementation using UDP, BLE GATT, or another non-stream
+transport MUST use a vendor-namespaced `transport` identifier such as
+`vendor.example/udp-binding-v1`; it MUST NOT report the unqualified identifiers `udp` or
+`bluetooth-le` or claim conformance to a standard OPAL binding. Its binding document is responsible
+for presenting reliable ordered frame delivery to the OPAL layer.
 
 **Timeouts**: Hosts MUST implement a timeout when waiting for a response to messages that always
 produce one (`Request Device Information`, `Request Device Configuration`, `Configure Device`,
-and `Ping`). A suggested timeout is 1 second over USB serial; timeouts may be adjusted per
-transport (e.g., longer for high-latency links like Bluetooth LE). When waiting for `SHOW_ACK` or
+and `Ping`). A suggested timeout is 1 second over USB serial; timeouts may be adjusted for a
+higher-latency conforming binding. When waiting for `SHOW_ACK` or
 `RESET_ACK`, hosts MUST use the component count, configured signaling protocol, LED count, and reset
 interval to calculate the physical frame duration as defined in [Frame Pipelining](#frame-pipelining),
 rather than relying on a fixed timeout. A `Show` accepted while another frame is active may wait for
@@ -977,8 +996,8 @@ or fall back to a documented implementation-specific management timeout when tho
 (not advertised). Hosts MUST add transport, scheduling, and implementation margin to these physical
 minima.
 
-Future versions may define additional transport bindings for other reliable or packet-based
-transports.
+Future versions may define additional stream or packet bindings without changing the core frame
+format, provided each binding supplies the delivery contract above.
 
 
 ## Conformance
