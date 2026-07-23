@@ -84,10 +84,6 @@ The format used is **CRC-16/CCITT-FALSE** with the following parameters:
  - Initial value: `0xFFFF`
  - No input reflection, no output reflection, no final XOR.
 
-> [!NOTE]
-> Implementations can verify their CRC by computing it over the ASCII string `"123456789"`, which
-> MUST yield `0x29B1`.
-
 Receivers MUST validate the CRC on every complete COBS-decoded candidate of at least seven bytes and
 MUST silently discard a candidate with an invalid CRC. Candidates that cannot be
 decoded, are shorter than seven bytes, or were discarded as oversized follow the recovery rules in
