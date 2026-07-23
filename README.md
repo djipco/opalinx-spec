@@ -138,11 +138,19 @@ it MUST NOT send an `ERROR` response to a malformed response, which avoids error
    `identifier` + `payload length` + `payload`.
 
 **Frame size**: The protocol supports a maximum payload length of 65535 bytes (16-bit unsigned
-integer). **OPAL** implementations MUST support at least 4101 bytes of payload, sufficient to
-accommodate 1365 RGB or 1024 RGBW LEDs per `Set Pixels` message. Each device advertises its actual 
-buffer capacity in the `max_payload_length` field of the `INFO` response; clients MUST NOT send a 
-payload exceeding the advertised value. Devices MUST reject frames exceeding their capacity with
-`ERR_INVALID_PAYLOAD_LENGTH`. After COBS encoding, a frame grows by at most one byte per 254 bytes 
+integer). Every implementation MUST accept at least 8 payload bytes, enough for one RGB
+`Set Pixels` operation (`5` addressing bytes + `3` component bytes). A device advertising
+`CAP_RGBW` MUST accept at least 9 payload bytes so one RGBW pixel also fits. Implementations intended
+for high-throughput streaming SHOULD accept at least 4101 payload bytes, sufficient for 1365 RGB or
+1024 RGBW LEDs per `Set Pixels` message, but this is a performance recommendation rather than a
+conformance requirement.
+
+Each device advertises its actual buffer capacity in the `max_payload_length` field of the `INFO`
+response. Clients MUST derive their chunk size from that field and MUST NOT send a payload exceeding
+the advertised value. Because `Set Pixels` carries an LED offset, an arbitrarily long channel can be
+updated through multiple messages without requiring the whole channel to fit in one payload. Devices
+MUST reject frames exceeding their capacity with `ERR_INVALID_PAYLOAD_LENGTH`. After COBS encoding,
+a frame grows by at most one byte per 254 bytes
 of input plus the `0x00` delimiter. Receivers SHOULD size their read buffers for the worst-case 
 encoded length of the largest payload they intend to receive:
 
@@ -606,7 +614,7 @@ Sent in response to [`Request Device Information`](#request-device-information-0
 | Firmware version major  | 1 byte   | Device firmware major version                               |
 | Firmware version minor  | 1 byte   | Device firmware minor version                               |
 | Firmware version patch  | 1 byte   | Device firmware patch version                               |
-| Max payload length      | 2 bytes  | Max accepted payload, in bytes, little-endian; MUST be ≥ 4101 |
+| Max payload length      | 2 bytes  | Max accepted payload, little-endian; MUST be ≥ 8, or ≥ 9 with `CAP_RGBW` |
 | Max in-flight frames    | 1 byte   | Pipeline-model compatibility constant; MUST be `2` in OPAL 1.0 |
 | Max LEDs (RGB)          | 2 bytes  | Max LEDs per channel in a 3-component order, little-endian; `0` = not advertised |
 | Max LEDs (RGBW)         | 2 bytes  | Max LEDs per channel in a 4-component order, little-endian; `0` = not advertised |
