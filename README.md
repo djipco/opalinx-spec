@@ -923,6 +923,18 @@ Both identifiers share the same payload structure.
 The payload contains one **channel configuration entry** per channel, in channel-number order
 (channel 0 first, channel `N-1` last).
 
+CONFIG intentionally does not repeat `N`: the authoritative channel count is the INFO
+`channel_count` established earlier in the same session. A host MUST have accepted a valid INFO from
+the current session before accepting either CONFIG response, and MUST require the CONFIG payload to
+contain exactly `N × 4` bytes. It MUST NOT infer a channel count from CONFIG length or reuse INFO
+cached across a connection boundary. A structurally valid CONFIG received without same-session INFO,
+or with any other entry count, is a protocol error and MUST NOT replace cached configuration.
+
+The device's INFO `channel_count` MUST remain constant for the lifetime of a session. Repeating INFO
+does not create a new session; if a host observes a different count, it MUST treat the connection as
+discontinuous and re-establish the session. Keeping the count out of CONFIG avoids redundant state
+and eliminates disagreement between two count fields.
+
 Each entry has the following structure:
 
 | Field            | Size    | Description                                           |
