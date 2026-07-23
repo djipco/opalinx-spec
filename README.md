@@ -449,7 +449,9 @@ channels to be updated at independent frame rates.
 `TxID ≠ 0x0000`; no response if `TxID = 0x0000`. Emits [`ERROR`](#error-0xe0) on failure
 regardless of `TxID`. Hosts that use a non-zero `TxID` for `Show` and wait for `SHOW_ACK` before
 issuing the next `Show` are guaranteed never to receive `ERR_BUSY`. For high-throughput streaming,
-`TxID = 0x0000` is recommended to avoid ACK overhead.
+hosts MUST use acknowledged `Show` requests as described in [Frame Pipelining](#frame-pipelining).
+`TxID = 0x0000` is suitable only when the host deliberately does not pipeline and does not require
+completion or buffer-safety feedback.
 
 ### Frame Pipelining
 
@@ -487,46 +489,84 @@ host MUST reject any other reported value as incompatible. Whether pipeline dept
 advertised field in a later draft revision is intentionally separate from the OPAL 1.0 wire-layout
 requirement defined here.
 
-**Device behavior (mandatory).** Every conformant device MUST tolerate exactly one queued broadcast
-`Show`:
+#### Pipeline buffer model
 
-- A broadcast `Show` that arrives while the device is transmitting a previous frame, and while no
-  other `Show` is already queued, MUST be accepted (not rejected with `ERR_BUSY`). The device MUST
-  begin transmitting the queued frame as soon as the current frame completes, including the
-  inter-frame reset period.
-- A `Show` that arrives while a `Show` is already queued MUST be rejected with `ERR_BUSY`. This
-  bounds the device to a single queued frame.
-- Holding a queued frame while transmitting the current one implies at least one frame of buffering
-  ahead of the output (double buffering). This is the one hardware requirement pipelining places on
-  a conformant device; it is inexpensive for any practical **WS281x** controller.
-- A device MAY satisfy the requirement by serializing — accepting the queued `Show` but not
-  overlapping any preparation with reception. Such a device is fully conformant; it simply gains no
-  throughput benefit. A device that overlaps preparation and transmission of the queued frame with
-  continued reception of the next frame's data obtains the full benefit. The wire-visible behaviour
-  is identical either way, so the host treats all conformant devices the same and never needs to
-  distinguish them.
+The state machine uses two logical storage roles:
 
-The device samples a queued frame's channel buffers when it begins transmitting that frame, not
-when the `Show` is queued. A device MAY reject `Set Pixels`, `Fill Channel`, or `Configure Device`
-messages that arrive while a `Show` is queued with `ERR_BUSY`, since such messages would otherwise
-overwrite the queued frame's not-yet-sampled buffers.
+- The **staging buffers** are modified by `Set Pixels` and `Fill Channel` and persist between frames.
+- The **active snapshot** is the immutable data currently owned by the LED-output backend. Starting
+  a transmission samples or otherwise commits the staging buffers into this role.
 
-**Host discipline.** A pipelining host keeps at most one `Show` queued beyond the transmitting frame
-and MUST use a non-zero `TxID` on every pipelined `Show` so it can track completion. Having sent
-`Show` for frame *N+1* while frame *N* is still transmitting, the host MUST NOT send any
-`Set Pixels`, `Fill Channel`, or `Configure Device` for a later frame until it has received
-`SHOW_ACK` for frame *N*. That acknowledgement is emitted when frame *N*'s transmission completes and
-frame *N+1* has been committed to hardware, so it guarantees frame *N+1*'s buffers have been sampled
-and are safe to overwrite. This rule bounds the host to a single queued `Show` and keeps the
-acknowledgement round-trip off the critical path, since the next `Show` is already waiting in the
-device when the current frame finishes.
+A queued `Show` is only a queue record containing its target and transaction ID. It does **not**
+snapshot the staging buffers when accepted. The staging buffers become reserved for that queued
+frame and are sampled only when the queued `Show` is promoted to active. An implementation may use
+copying, buffer swapping, DMA ownership transfer, or another mechanism, provided its externally
+visible behavior is identical.
 
-The pixel traffic itself stays fire-and-forget: `Set Pixels` and `Fill Channel` use `TxID = 0x0000`
-and are never acknowledged. Only the frame-boundary `Show` carries a non-zero `TxID`; that single
-lightweight acknowledgement per frame is the host's pacing and buffer-safety signal. A lagging
-`SHOW_ACK` stream is therefore the backpressure signal: if acknowledgements fall behind, the host is
-outrunning the device and MUST stop queuing further `Show` messages until the outstanding
-acknowledgement arrives, rather than risk `ERR_BUSY`.
+#### Device states
+
+The pipeline is global to the device, including on devices that support per-channel `Show`:
+
+| State | Active transmission | Queued `Show` | Staging-buffer ownership |
+|-------|---------------------|---------------|--------------------------|
+| `IDLE` | No | No | Free for pixel writes |
+| `ACTIVE` | Yes | No | Free for preparation of the next frame |
+| `ACTIVE_QUEUED` | Yes | Yes | Reserved for the queued frame |
+
+The physical LED reset/latch interval is part of the active transmission. The device remains in
+`ACTIVE` or `ACTIVE_QUEUED` until both pixel transmission and the required reset interval complete.
+An internal scheduling delay between accepting a `Show` in `IDLE` and starting hardware output MUST
+NOT be externally observable: the staging buffers must be sampled before the device processes a
+later request that could modify them.
+
+After validating the complete request, the device MUST apply this admission table. A rejection does
+not change pipeline or buffer state.
+
+| Request | `IDLE` | `ACTIVE` | `ACTIVE_QUEUED` |
+|---------|--------|----------|-----------------|
+| `Set Pixels`, `Fill Channel` | Accept | Accept into staging | `ERR_BUSY` |
+| `Show` | Sample staging and enter `ACTIVE` | Queue and enter `ACTIVE_QUEUED` | `ERR_BUSY` |
+| `Configure Device` | Accept | `ERR_BUSY` | `ERR_BUSY` |
+| `Reset` | Accept | `ERR_BUSY` | `ERR_BUSY` |
+| Query and `Ping` requests | Accept | Accept | Accept |
+
+The table applies after message-specific length, parameter, capability, and device-operational checks.
+For example, an invalid channel still produces `ERR_INVALID_PARAMETER` rather than `ERR_BUSY`.
+Vendor requests define their own state admission rules.
+
+#### Completion, promotion, and acknowledgements
+
+When an active frame finishes, the device MUST perform the following transition atomically with
+respect to request processing:
+
+- From `ACTIVE`: release the active snapshot, enter `IDLE`, then emit `SHOW_ACK` for the completed
+  `Show` if its transaction ID is nonzero.
+- From `ACTIVE_QUEUED`: sample the reserved staging buffers, start the queued `Show`, clear the queue
+  record, enter `ACTIVE`, and only then emit `SHOW_ACK` for the frame that just completed if its
+  transaction ID is nonzero.
+
+Every `SHOW_ACK(TxID=N)` proves that the `Show` carrying transaction ID `N` has completed its physical
+LED transmission and reset interval. If a successor was queued behind that frame, the same
+acknowledgement additionally proves that the successor has been sampled into the active snapshot and
+the staging buffers are free for reuse. It does not acknowledge completion of the successor; that
+successor receives its own `SHOW_ACK` after it finishes. Responses are therefore emitted in accepted
+`Show` order.
+
+#### Host discipline
+
+A pipelining host MUST use a nonzero transaction ID for every `Show`; it MUST be distinct from every
+other outstanding transaction ID. The host keeps no more than two `Show` operations outstanding:
+one active and one queued. The steady-state sequence is:
+
+1. Prepare frame *N* in staging and send `Show(N)`.
+2. While frame *N* is active, prepare frame *N+1* and send `Show(N+1)`, reserving staging.
+3. Do not send pixel writes for frame *N+2* until `SHOW_ACK(N)` arrives.
+4. On `SHOW_ACK(N)`, frame *N+1* is active and staging is free; prepare frame *N+2* and continue.
+
+Pixel traffic may remain fire-and-forget with `TxID = 0x0000`; the acknowledged `Show` is the single
+per-frame pacing and buffer-safety signal. A host MUST stop submitting later-frame data whenever two
+`Show` operations are outstanding. The final frame is drained by waiting for its own `SHOW_ACK`,
+which proves that no transmission or queued frame remains.
 
 ### Reset (`0x51`)
 
@@ -747,14 +787,15 @@ conditions not covered by any other code and SHOULD NOT be used when a more spec
 `ERR_BUSY` governs messages that arrive while the device is still transmitting a previous frame to
 the LEDs:
 
-- A `Show` request MUST be accepted and queued if no `Show` is already queued, and MUST be rejected
-  with `ERR_BUSY` only if a `Show` is already queued. See [Frame Pipelining](#frame-pipelining) for
-  the full one-deep queue semantics.
-- A `Reset` request MUST be rejected with `ERR_BUSY`. `Reset` is a management command, not a
-  streaming operation, and is not queued.
-- Devices MAY reject `Set Pixels`, `Fill Channel`, or `Configure Device` messages with `ERR_BUSY`
-  during active transmission, and MAY do so while a `Show` is queued to protect the queued frame's
-  buffers (see [Frame Pipelining](#frame-pipelining)).
+- A valid `Show` received in `ACTIVE` MUST be accepted and queued. A valid `Show` received in
+  `ACTIVE_QUEUED` MUST be rejected with `ERR_BUSY`.
+- A `Reset` request received in `ACTIVE` or `ACTIVE_QUEUED` MUST be rejected with `ERR_BUSY`.
+  `Reset` is a management command, not a streaming operation, and is not queued.
+- `Configure Device` MUST be rejected with `ERR_BUSY` in `ACTIVE` or `ACTIVE_QUEUED`.
+- `Set Pixels` and `Fill Channel` MUST be accepted in `ACTIVE`, when staging is free, and MUST be
+  rejected with `ERR_BUSY` in `ACTIVE_QUEUED`, when staging is reserved for the queued frame.
+
+These rules are summarized normatively in the [pipeline admission table](#device-states).
 
 When `ERR_FRAMING_ERROR` is emitted, the transaction ID in the response MUST be `0x0000` and the
 offending identifier MUST be `0x00`, as neither could be recovered from the malformed frame.
@@ -855,8 +896,8 @@ An implementation is considered **OPAL** 1.0 conformant if it:
 - Responds to `Ping` with a `PONG` response.
 - Responds to `Reset` with a `RESET_ACK` response after LED transmission completes, and rejects a
   `Reset` received during active transmission with `ERR_BUSY`.
-- Tolerates a single queued broadcast `Show` per [Frame Pipelining](#frame-pipelining): accepts one
-  `Show` received during active transmission and rejects a second queued `Show` with `ERR_BUSY`.
+- Implements the pipeline states, admission table, atomic promotion order, and acknowledgement
+  guarantees defined in [Frame Pipelining](#frame-pipelining).
 - Sends `SET_PIXELS_ACK`, `FILL_CHANNEL_ACK`, and `SHOW_ACK` responses for pixel and show
   operations received with `TxID ≠ 0x0000`.
 - Ignores unknown capability flags and reserved fields per the [Conventions](#conventions)
