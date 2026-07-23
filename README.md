@@ -30,9 +30,8 @@ Both 3-component (RGB) and 4-component (RGBW) chips are supported.
 Specification releases follow [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
 
 The three protocol-version bytes at the start of `INFO` carry only the SemVer core
-`major.minor.patch`; they do not encode prerelease or build metadata. Thus an implementation of this
-prerelease reports `1.0.0` on the wire. These bytes identify the wire contract, not the firmware or
-library release.
+`major.minor.patch`; they do not encode prerelease or build metadata. These bytes identify the wire 
+contract, not the firmware or library release.
 
 A host MUST inspect the three-byte version preamble before parsing the version-specific remainder of
 `INFO`. An `INFO` payload shorter than three bytes is malformed. If the major version is unsupported,
