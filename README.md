@@ -1024,11 +1024,11 @@ one device. A conforming core binding MUST:
 
 - deliver accepted bytes once, in order, without insertion or duplication;
 - preserve the complete COBS-encoded frame stream, including `0x00` delimiters;
-- provide backpressure, flow control, buffering, or an equivalent mechanism sufficient to prevent
-  routine receive overruns at the binding's documented operating rate;
+- sustain its documented operating rate without routine byte loss or receive overrun;
 - expose connection loss as a transport failure rather than silently reconnecting a new peer into an
   existing Opalinx session;
-- reset partial-frame accumulation at a connection boundary.
+- ensure that bytes received before a connection boundary cannot form a frame with bytes received
+  after it.
 
 CRC and delimiter recovery detect corruption and restore framing after a fault; they do not make an
 unreliable transport reliable. Loss of a valid fire-and-forget request cannot be recovered by the
@@ -1037,16 +1037,15 @@ core protocol, and transaction IDs provide correlation rather than retransmissio
 ### Connection and session boundaries
 
 One established transport connection is one Opalinx session. Transaction IDs and responses are
-scoped to that session and have no meaning after its connection ends. At every connection
-establishment and loss, an endpoint MUST discard partial receive-frame accumulation. A device MUST
-also discard all unsent responses from the old session so they cannot be delivered to a new host.
+scoped to that session and have no meaning after its connection ends. An incomplete frame at a
+connection boundary is discarded. A device MUST NOT deliver a response from an ended session to a
+later session.
 
 A connection boundary is not a device reset. Device configuration, staging pixel buffers, currently
 displayed LED values, and diagnostic counters persist. If physical LED transmission has already
 started, it MUST be allowed to finish, but its old-session acknowledgement is discarded. A pending
-`Show` that has not started MUST be canceled, its acknowledgement discarded, and its protected frame
-storage released. This pending-Show cancellation is the sole exception; no other accepted operation
-is rolled back.
+`Show` that has not started MUST be canceled and its acknowledgement discarded. This pending-Show
+cancellation is the sole exception; no other accepted operation is rolled back.
 
 Consequently, a newly connected host MUST NOT assume power-on defaults or known staging contents. It
 MUST begin with `Request Device Information`, SHOULD request the current configuration, and MUST
@@ -1066,9 +1065,9 @@ Bindings define observable boundaries as follows:
 The following standard identifiers denote direct core-stream bindings:
 
 - **`usb-cdc`**: Opalinx frames are carried unchanged over a USB CDC byte stream.
-- **`uart`**: Opalinx frames are carried unchanged over a hardware UART. The implementation MUST choose
-  baud rate, buffering, and hardware/software flow control so the documented operating mode meets the
-  core stream contract. A UART overrun is a transport failure even if the parser later resynchronizes.
+- **`uart`**: Opalinx frames are carried unchanged over a hardware UART. Its documented operating
+  mode MUST meet the core stream contract. A UART overrun is a transport failure even if frame
+  parsing later resynchronizes.
 - **`tcp`**: One Opalinx session occupies one established TCP connection. Frames are carried unchanged
   over the connection's byte stream.
 - **`bluetooth-spp`**: Frames are carried unchanged over one Bluetooth RFCOMM/SPP stream.
