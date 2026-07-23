@@ -602,109 +602,62 @@ the device idle for one host round-trip at every frame boundary, because the dev
 next frame until a new `Show` arrives. Frame pipelining removes that idle gap by letting the host
 queue the next `Show` while the current frame is still transmitting.
 
-**Frame pipelining is a mandatory part of Opalinx.** Every conformant device supports a one-deep `Show`
-queue, so a host can always pipeline without negotiating a capability first — pipelining is never
-rejected and is never slower than lock-step. This universality is deliberate: it lets host libraries
-keep the transmission pipe full by default rather than treating high throughput as an optional
-extra.
+**Opalinx 1.0 supports exactly one pending `Show`.** A device may have one `Show` transmitting and
+one additional `Show` waiting behind it. This fixed backlog is mandatory and requires no capability
+negotiation. A third `Show` is rejected with `ERR_BUSY`.
 
-In Opalinx 1.0 the pipeline depth is fixed at exactly `2`: one actively transmitting `Show` plus one
-queued `Show`. This is part of the base protocol contract, not a negotiable device resource, so it is
-not repeated in [`INFO`](#info-0x81). A host implementing Opalinx 1.0 always applies the state machine
-below.
+Accepting a `Show` logically captures the staged frame for that operation. Once captured, later
+requests cannot alter it. An implementation may copy pixels, swap buffers, transfer ownership, or
+reserve staging storage until transmission begins; only the observable guarantees below are
+normative.
 
-#### Future streaming models
+The pipeline is global to the device, including when per-channel `Show` is supported:
 
-A deeper queue cannot be created by changing a numeric limit: the baseline queued `Show` reserves
-one staging-buffer generation and does not snapshot arbitrarily many future frames. Any future
-advanced streaming model MUST therefore be advertised explicitly using a standard INFO extension
-and capability assigned by that future specification, and MUST use separately assigned request and
-response messages. Its definition must specify buffer ownership, frame boundaries, admission,
-backpressure, completion, acknowledgement, and recovery semantics. It MUST NOT reinterpret or
-change the behavior of the Opalinx 1.0 `Set Pixels`, `Fill Channel`, or `Show` messages.
+| State | Meaning |
+|-------|---------|
+| `IDLE` | No Show is transmitting or pending |
+| `ACTIVE` | One Show is transmitting; no Show is pending |
+| `ACTIVE_PENDING` | One Show is transmitting and one Show is pending |
 
-This leaves the mandatory baseline usable without negotiation while allowing future devices to add
-frame slots, buffer handles, bulk submission, compression, or deeper queues without complicating or
-weakening the 1.0 state machine.
+Pixel transmission includes the required reset/latch interval. The active Show does not complete
+until that interval ends.
 
-#### Pipeline buffer model
+After validating a request, the device applies this admission table. Rejection does not change
+pipeline or pixel state.
 
-The state machine uses two logical storage roles:
-
-- The **staging buffers** are modified by `Set Pixels` and `Fill Channel` and persist between frames.
-- The **active snapshot** is the immutable data currently owned by the LED-output backend. Starting
-  a transmission samples or otherwise commits the staging buffers into this role.
-
-A queued `Show` is only a queue record containing its target and transaction ID. It does **not**
-snapshot the staging buffers when accepted. The staging buffers become reserved for that queued
-frame and are sampled only when the queued `Show` is promoted to active. An implementation may use
-copying, buffer swapping, DMA ownership transfer, or another mechanism, provided its externally
-visible behavior is identical.
-
-#### Device states
-
-The pipeline is global to the device, including on devices that support per-channel `Show`:
-
-| State | Active transmission | Queued `Show` | Staging-buffer ownership |
-|-------|---------------------|---------------|--------------------------|
-| `IDLE` | No | No | Free for pixel writes |
-| `ACTIVE` | Yes | No | Free for preparation of the next frame |
-| `ACTIVE_QUEUED` | Yes | Yes | Reserved for the queued frame |
-
-The physical LED reset/latch interval is part of the active transmission. The device remains in
-`ACTIVE` or `ACTIVE_QUEUED` until both pixel transmission and the required reset interval complete.
-An internal scheduling delay between accepting a `Show` in `IDLE` and starting hardware output MUST
-NOT be externally observable: the staging buffers must be sampled before the device processes a
-later request that could modify them.
-
-After validating the complete request, the device MUST apply this admission table. A rejection does
-not change pipeline or buffer state.
-
-| Request | `IDLE` | `ACTIVE` | `ACTIVE_QUEUED` |
-|---------|--------|----------|-----------------|
-| `Set Pixels`, `Fill Channel` | Accept | Accept into staging | `ERR_BUSY` |
-| `Show` | Sample staging and enter `ACTIVE` | Queue and enter `ACTIVE_QUEUED` | `ERR_BUSY` |
-| `Configure Device` | Accept | `ERR_BUSY` | `ERR_BUSY` |
-| `Reset` | Accept | `ERR_BUSY` | `ERR_BUSY` |
+| Request | `IDLE` | `ACTIVE` | `ACTIVE_PENDING` |
+|---------|--------|----------|------------------|
+| `Set Pixels`, `Fill Channel` | Accept | Accept for the next frame | `ERR_BUSY` |
+| `Show` | Start and enter `ACTIVE` | Capture as pending and enter `ACTIVE_PENDING` | `ERR_BUSY` |
+| `Configure Device`, `Reset` | Accept | `ERR_BUSY` | `ERR_BUSY` |
 | Query and `Ping` requests | Accept | Accept | Accept |
 
-The table applies after message-specific length, parameter, capability, and device-operational checks.
-For example, an invalid channel still produces `ERR_INVALID_PARAMETER` rather than `ERR_BUSY`.
-Vendor requests define their own state admission rules.
+The table applies after message-specific length, parameter, capability, and device-operational
+checks. For example, an invalid channel produces `ERR_INVALID_PARAMETER`, not `ERR_BUSY`. Vendor
+requests define their own admission rules.
 
-#### Completion, promotion, and acknowledgements
+When the active Show completes:
 
-When an active frame finishes, the device MUST perform the following transition atomically with
-respect to request processing:
+- with no pending Show, the device enters `IDLE`;
+- with a pending Show, the device starts it, enters `ACTIVE`, and makes storage available for
+  preparation of the following frame.
 
-- From `ACTIVE`: release the active snapshot, enter `IDLE`, then emit `SHOW_ACK` for the completed
-  `Show` if its transaction ID is nonzero.
-- From `ACTIVE_QUEUED`: sample the reserved staging buffers, start the queued `Show`, clear the queue
-  record, enter `ACTIVE`, and only then emit `SHOW_ACK` for the frame that just completed if its
-  transaction ID is nonzero.
+Only after that transition does the device emit `SHOW_ACK` for the completed Show, if its transaction
+ID is nonzero. A `SHOW_ACK` therefore proves that the named Show has completed and that the host may
+prepare another frame. Show acknowledgements are emitted in accepted order.
 
-Every `SHOW_ACK(TxID=N)` proves that the `Show` carrying transaction ID `N` has completed its physical
-LED transmission and reset interval. If a successor was queued behind that frame, the same
-acknowledgement additionally proves that the successor has been sampled into the active snapshot and
-the staging buffers are free for reuse. It does not acknowledge completion of the successor; that
-successor receives its own `SHOW_ACK` after it finishes. Responses are therefore emitted in accepted
-`Show` order.
+A pipelining host uses a distinct nonzero transaction ID for each outstanding Show and keeps no more
+than two Shows outstanding. Pixel updates may use transaction ID zero. The normal sequence is:
 
-#### Host discipline
+1. Prepare and submit frame *N* with `Show(N)`.
+2. While *N* transmits, prepare and submit frame *N+1* with `Show(N+1)`.
+3. Wait for `SHOW_ACK(N)` before preparing frame *N+2*.
 
-A pipelining host MUST use a nonzero transaction ID for every `Show`; it MUST be distinct from every
-other outstanding transaction ID. The host keeps no more than two `Show` operations outstanding:
-one active and one queued. The steady-state sequence is:
+Waiting for the final Show's acknowledgement drains the pipeline.
 
-1. Prepare frame *N* in staging and send `Show(N)`.
-2. While frame *N* is active, prepare frame *N+1* and send `Show(N+1)`, reserving staging.
-3. Do not send pixel writes for frame *N+2* until `SHOW_ACK(N)` arrives.
-4. On `SHOW_ACK(N)`, frame *N+1* is active and staging is free; prepare frame *N+2* and continue.
-
-Pixel traffic may remain fire-and-forget with `TxID = 0x0000`; the acknowledged `Show` is the single
-per-frame pacing and buffer-safety signal. A host MUST stop submitting later-frame data whenever two
-`Show` operations are outstanding. The final frame is drained by waiting for its own `SHOW_ACK`,
-which proves that no transmission or queued frame remains.
+A future specification may add a larger backlog or a different streaming model, but it MUST
+advertise that model explicitly and use separate messages. It MUST NOT change the behavior of the
+Opalinx 1.0 `Set Pixels`, `Fill Channel`, or `Show` messages.
 
 ### Reset (`0x51`)
 
@@ -903,8 +856,8 @@ The fixed 32-bit field holds foundational capabilities that are useful to nearly
 boolean features SHOULD normally use the extended-capabilities record so adding them does not consume
 scarce fixed-prefix bits.
 
-The mandatory one-deep `Show` queue is **not** a capability bit or INFO field. Every conformant
-device supports one actively transmitting plus one queued `Show` as part of the base contract (see
+The mandatory one-Show backlog is **not** a capability bit or INFO field. Every conformant device
+supports one actively transmitting plus one pending `Show` as part of the base contract (see
 [Frame Pipelining](#frame-pipelining)). A future advanced streaming model is a separate additive
 feature and does not alter these messages.
 
@@ -1035,18 +988,9 @@ conditions not covered by any other code and SHOULD NOT be used when a more spec
 Hosts MUST accept and expose an unknown error code numerically; an unknown code does not make the
 otherwise well-formed `ERROR` response malformed.
 
-`ERR_BUSY` governs messages that arrive while the device is still transmitting a previous frame to
-the LEDs:
-
-- A valid `Show` received in `ACTIVE` MUST be accepted and queued. A valid `Show` received in
-  `ACTIVE_QUEUED` MUST be rejected with `ERR_BUSY`.
-- A `Reset` request received in `ACTIVE` or `ACTIVE_QUEUED` MUST be rejected with `ERR_BUSY`.
-  `Reset` is a management command, not a streaming operation, and is not queued.
-- `Configure Device` MUST be rejected with `ERR_BUSY` in `ACTIVE` or `ACTIVE_QUEUED`.
-- `Set Pixels` and `Fill Channel` MUST be accepted in `ACTIVE`, when staging is free, and MUST be
-  rejected with `ERR_BUSY` in `ACTIVE_QUEUED`, when staging is reserved for the queued frame.
-
-These rules are summarized normatively in the [pipeline admission table](#device-states).
+`ERR_BUSY` governs requests that exceed the one-Show backlog or require mutable pixel/configuration
+state that is not currently available. The normative cases are defined by the
+[pipeline admission table](#frame-pipelining).
 
 `ERR_CRC_MISMATCH` and `ERR_FRAMING_ERROR` remain assigned for compatibility with early drafts, but
 the Opalinx 1.0 byte-stream binding does not emit them: neither condition provides a trustworthy
@@ -1103,9 +1047,10 @@ also discard all unsent responses from the old session so they cannot be deliver
 
 A connection boundary is not a device reset. Device configuration, staging pixel buffers, currently
 displayed LED values, and diagnostic counters persist. If physical LED transmission has already
-started, it MUST be allowed to finish, but its old-session acknowledgement is discarded. A queued
-`Show` that has not started MUST be canceled, its acknowledgement discarded, and its staging-buffer
-reservation released. No other accepted operation is rolled back.
+started, it MUST be allowed to finish, but its old-session acknowledgement is discarded. A pending
+`Show` that has not started MUST be canceled, its acknowledgement discarded, and its protected frame
+storage released. This pending-Show cancellation is the sole exception; no other accepted operation
+is rolled back.
 
 Consequently, a newly connected host MUST NOT assume power-on defaults or known staging contents. It
 MUST begin with `Request Device Information`, SHOULD request the current configuration, and MUST
@@ -1226,7 +1171,7 @@ An implementation is considered **Opalinx** 1.0 conformant if it:
 - Responds to `Ping` with a `PONG` response.
 - Responds to `Reset` with a `RESET_ACK` response after LED transmission completes, and rejects a
   `Reset` received during active transmission with `ERR_BUSY`.
-- Implements the pipeline states, admission table, atomic promotion order, and acknowledgement
+- Implements the one-Show backlog, admission, frame-protection, completion, and acknowledgement
   guarantees defined in [Frame Pipelining](#frame-pipelining).
 - Sends `SET_PIXELS_ACK`, `FILL_CHANNEL_ACK`, and `SHOW_ACK` responses for pixel and show
   operations received with `TxID ≠ 0x0000`.
