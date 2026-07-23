@@ -254,7 +254,8 @@ Messages are grouped by purpose. The high bit of the identifier byte distinguish
 | `0x40` – `0x4F` | Pixel data operations                                      |
 | `0x50` – `0x5F` | Control operations (show, reset)                           |
 | `0x60` – `0x6F` | Reserved (mirrors `0xE0`–`0xEF`; MUST NOT be assigned)     |
-| `0x70` – `0x7F` | Vendor-specific extensions                                 |
+| `0x70` – `0x7E` | Private vendor-specific requests                            |
+| `0x7F`          | Standard namespaced vendor request envelope                 |
 
 ### Responses (`0x80`–`0xFF`)
 
@@ -268,7 +269,8 @@ Messages are grouped by purpose. The high bit of the identifier byte distinguish
 | `0xC0` – `0xCF` | Pixel data responses                                       |
 | `0xD0` – `0xDF` | Control responses                                          |
 | `0xE0` – `0xEF` | Errors                                                     |
-| `0xF0` – `0xFF` | Vendor-specific responses                                  |
+| `0xF0` – `0xFE` | Private vendor-specific responses                           |
+| `0xFF`          | Standard namespaced vendor response envelope                |
 
 **Response pairing convention.** The success response identifier for a given request is the
 request identifier with the high bit set: a request with identifier `0x01` is paired with a
@@ -664,6 +666,32 @@ to establish a known state after connection or after an error condition.
 a management command, not a streaming operation. The `RESET_ACK` response carries the echoed
 transaction ID, including `0x0000` if the request was sent with `TxID = 0x0000`.
 
+### Namespaced Vendor Request (`0x7F`)
+
+Carries an extension command without consuming a globally shared identifier. Its payload is:
+
+| Field            | Size      | Description                                       |
+|------------------|-----------|---------------------------------------------------|
+| Namespace length | 1 byte    | Namespace length `1`–`63`                         |
+| Namespace        | variable  | Lowercase ASCII reverse-DNS name                  |
+| Command ID       | 2 bytes   | Vendor-assigned identifier, little-endian         |
+| Vendor payload   | remaining | Defined by the namespace and command; may be empty |
+
+A namespace contains only lowercase ASCII letters, digits, hyphens, and periods; its first and last
+characters MUST be a letter or digit. The owner of a DNS name controls its reverse-DNS namespace,
+such as `com.example.lighting`. Command IDs are assigned independently within each namespace.
+
+A device that does not implement the namespace or command MUST return `ERR_UNSUPPORTED`. Invalid
+envelope structure produces `ERR_INVALID_PAYLOAD_LENGTH`; an invalid namespace produces
+`ERR_INVALID_PARAMETER`. With a nonzero transaction ID, success MUST produce a
+[`Namespaced Vendor Response`](#namespaced-vendor-response-0xff). With transaction ID zero, success
+produces no response unless the vendor contract forbids fire-and-forget use. Failures produce
+`ERROR` regardless of transaction ID.
+
+Private identifiers `0x70`–`0x7E` remain available when both endpoints are coordinated as one closed
+system. They are not collision-free and MUST NOT be used for a reusable or independently published
+extension; such extensions MUST use this envelope.
+
 ## Response Messages
 
 ### INFO (`0x81`)
@@ -746,8 +774,9 @@ Type assignments are divided into these ranges:
 |-----------------|-------------------------------------------------------------|
 | `0x00`          | Reserved; senders MUST NOT emit                              |
 | `0x01`–`0x05`   | Standard Opalinx 1.0 information records                         |
-| `0x06`–`0x7F`   | Standard extensions assigned by future Opalinx specifications   |
-| `0x80`–`0xFF`   | Vendor-specific extensions                                   |
+| `0x06`–`0x7E`   | Standard records assigned by future Opalinx specifications    |
+| `0x7F`          | Standard namespaced vendor-information envelope               |
+| `0x80`–`0xFF`   | Private vendor records for coordinated closed systems         |
 
 The outer INFO payload length terminates the extension area; no end marker or padding is permitted.
 Every record, including an unknown record, MUST fit completely within that payload. A truncated TLV
@@ -769,12 +798,19 @@ The Opalinx 1.0 standard records are:
 | `0x03` | Hardware revision   | Required    | UTF-8, `1`–`63` bytes                             |
 | `0x04` | Hardware platform   | Required    | UTF-8, `1`–`63` bytes                             |
 | `0x05` | Transport           | Required    | UTF-8 identifier, `1`–`63` bytes                  |
+| `0x7F` | Vendor information  | Optional    | Namespaced vendor-information envelope            |
 
 Every required record MUST occur exactly once. A known standard record with an invalid length or a
 duplicate known record makes INFO malformed. Record order has no meaning; senders SHOULD emit
 standard records in ascending type order for deterministic diagnostics. Adding a standard record is
 additive and does not change the offsets or interpretation of the fixed prefix. Changing, removing,
 or reordering a fixed field requires an incompatible protocol revision.
+
+The `0x7F` vendor-information value contains namespace length (1 byte), namespace, vendor record ID
+(2 bytes little-endian), and vendor data. Namespace syntax and ownership match the Namespaced Vendor
+Request. Type `0x7F` MAY repeat because each `(namespace, vendor record ID)` pair is independently
+identified; a sender MUST NOT repeat the same pair. Private types `0x80`–`0xFF` are collision-prone
+and MUST NOT be used for reusable or independently published metadata.
 
 **Capability flags** (bit positions within the 32-bit little-endian field):
 
@@ -857,6 +893,14 @@ Sent in response to a successful [`Reset`](#reset-0x51), after LED transmission 
 | TRANSACTION ID | IDENTIFIER | PAYLOAD LENGTH | CHECKSUM |
 |----------------|------------|----------------|----------|
 | 2 bytes        | `0xD1`     | `0x00` `0x00`  | 2 bytes  |
+
+### Namespaced Vendor Response (`0xFF`)
+
+Sent after successful handling of a [`Namespaced Vendor Request`](#namespaced-vendor-request-0x7f)
+with a nonzero transaction ID. Its payload repeats the request's namespace length, namespace, and
+command ID, followed by the command-specific response payload. The echoed transaction ID remains the
+primary correlation key; repeating the namespace and command prevents decoding under the wrong
+vendor contract.
 
 ### ERROR (`0xE0`)
 
@@ -1029,12 +1073,14 @@ An implementation is considered **Opalinx** 1.0 conformant if it:
   operations received with `TxID ≠ 0x0000`.
 - Ignores unknown capability flags and reserved fields per the [Conventions](#conventions)
   section.
-- Honors the `0x70`–`0x7F` and `0xF0`–`0xFF` vendor-specific identifier ranges by either
-  implementing them or rejecting them cleanly with `ERR_UNKNOWN_IDENTIFIER`.
+- Recognizes the namespaced vendor envelope and returns `ERR_UNSUPPORTED` for an unimplemented
+  namespace or command.
+- Honors private vendor identifier ranges by either implementing them or rejecting them cleanly
+  with `ERR_UNKNOWN_IDENTIFIER`.
 
-Implementations MAY add vendor-specific requests in the `0x70`–`0x7F` range and vendor-specific
-responses in the `0xF0`–`0xFF` range. Clients encountering vendor-specific messages they do not
-recognize SHOULD ignore them.
+Implementations MAY add private requests in `0x70`–`0x7E` and paired responses in `0xF0`–`0xFE` for
+closed systems. Independently published extensions use `0x7F`/`0xFF`. Clients encountering private
+vendor messages they do not recognize SHOULD ignore them.
 
 
 ## Security Considerations
