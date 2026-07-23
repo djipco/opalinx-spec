@@ -1,0 +1,79 @@
+{
+  "$schema": "./schema.json",
+  "corpus_version": 1,
+  "protocol_version": "1.0.0",
+  "valid_frames": [
+    {
+      "name": "get_info_tx_zero",
+      "tx_id": 0,
+      "identifier": 1,
+      "payload_hex": "",
+      "decoded_hex": "00000100003c26",
+      "wire_hex": "0101020101033c2600"
+    },
+    {
+      "name": "configure_with_embedded_zeroes",
+      "tx_id": 4660,
+      "identifier": 32,
+      "payload_hex": "ff02003c00",
+      "decoded_hex": "3412200500ff02003c00fe81",
+      "wire_hex": "053412200503ff02023c03fe8100"
+    },
+    {
+      "name": "set_pixels_rgb_with_zeroes",
+      "tx_id": 171,
+      "identifier": 64,
+      "payload_hex": "0000000200140a1e0000ff",
+      "decoded_hex": "ab00400b000000000200140a1e0000ffc740",
+      "wire_hex": "02ab03400b010101020204140a1e0104ffc74000"
+    },
+    {
+      "name": "show_broadcast",
+      "tx_id": 65535,
+      "identifier": 65,
+      "payload_hex": "ff000000",
+      "decoded_hex": "ffff410400ff0000008f28",
+      "wire_hex": "05ffff410402ff0101038f2800"
+    },
+    {
+      "name": "set_pixels_crosses_cobs_254_byte_block",
+      "tx_id": 258,
+      "identifier": 64,
+      "payload_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b",
+      "decoded_hex": "0201402c01000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b6ab5",
+      "wire_hex": "060201402c01ff0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfe02ff2e0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b6ab500"
+    }
+  ],
+  "invalid_decoded_frames": [
+    { "name": "empty_decoded_frame", "decoded_hex": "", "error": "frame_too_short" },
+    { "name": "three_byte_decoded_frame", "decoded_hex": "010203", "error": "frame_too_short" },
+    { "name": "bad_crc_precedes_length_check", "decoded_hex": "34128301000000", "error": "crc_mismatch" },
+    { "name": "crc_valid_payload_length_mismatch", "decoded_hex": "34128301001033", "error": "payload_length_mismatch" }
+  ],
+  "streams": [
+    {
+      "name": "split_and_back_to_back_frames",
+      "max_encoded_frame_length": 65801,
+      "chunks_hex": ["0101", "020101033c2600053412200503ff02023c03fe8100"],
+      "outcomes": [
+        { "frame": "get_info_tx_zero" },
+        { "frame": "configure_with_embedded_zeroes" }
+      ]
+    },
+    {
+      "name": "lone_delimiters_are_ignored",
+      "max_encoded_frame_length": 65801,
+      "chunks_hex": ["000000"],
+      "outcomes": []
+    },
+    {
+      "name": "oversized_frame_is_reported_once_then_recovers",
+      "max_encoded_frame_length": 8,
+      "chunks_hex": ["010101010101010101010101", "000101020101033c2600"],
+      "outcomes": [
+        { "error": "encoded_frame_too_long" },
+        { "frame": "get_info_tx_zero" }
+      ]
+    }
+  ]
+}

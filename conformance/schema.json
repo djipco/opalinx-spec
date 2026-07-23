@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opalinx.dev/schema/conformance-v1.json",
+  "title": "Opalinx wire conformance corpus",
+  "type": "object",
+  "required": ["corpus_version", "protocol_version", "valid_frames", "invalid_decoded_frames", "streams"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "corpus_version": { "const": 1 },
+    "protocol_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "valid_frames": { "type": "array", "items": { "$ref": "#/$defs/validFrame" } },
+    "invalid_decoded_frames": { "type": "array", "items": { "$ref": "#/$defs/invalidFrame" } },
+    "streams": { "type": "array", "items": { "$ref": "#/$defs/stream" } }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "hex": { "type": "string", "pattern": "^(?:[0-9a-f]{2})*$" },
+    "name": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+    "validFrame": {
+      "type": "object",
+      "required": ["name", "tx_id", "identifier", "payload_hex", "decoded_hex", "wire_hex"],
+      "properties": {
+        "name": { "$ref": "#/$defs/name" },
+        "tx_id": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "identifier": { "type": "integer", "minimum": 0, "maximum": 255 },
+        "payload_hex": { "$ref": "#/$defs/hex" },
+        "decoded_hex": { "$ref": "#/$defs/hex" },
+        "wire_hex": { "$ref": "#/$defs/hex" }
+      },
+      "additionalProperties": false
+    },
+    "invalidFrame": {
+      "type": "object",
+      "required": ["name", "decoded_hex", "error"],
+      "properties": {
+        "name": { "$ref": "#/$defs/name" },
+        "decoded_hex": { "$ref": "#/$defs/hex" },
+        "error": { "enum": ["frame_too_short", "crc_mismatch", "payload_length_mismatch"] }
+      },
+      "additionalProperties": false
+    },
+    "stream": {
+      "type": "object",
+      "required": ["name", "max_encoded_frame_length", "chunks_hex", "outcomes"],
+      "properties": {
+        "name": { "$ref": "#/$defs/name" },
+        "max_encoded_frame_length": { "type": "integer", "minimum": 1 },
+        "chunks_hex": { "type": "array", "items": { "$ref": "#/$defs/hex" }, "minItems": 1 },
+        "outcomes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "oneOf": [
+              { "required": ["frame"], "properties": { "frame": { "$ref": "#/$defs/name" } }, "additionalProperties": false },
+              { "required": ["error"], "properties": { "error": { "const": "encoded_frame_too_long" } }, "additionalProperties": false }
+            ]
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
