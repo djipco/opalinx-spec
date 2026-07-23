@@ -3,9 +3,7 @@
 
 > [!WARNING]
 > **This is a prerelease specification and is not production-ready.** Breaking changes may occur
-> before `1.0.0`. Implementations of different prerelease versions are not assumed compatible.
-> Protocol, firmware, and library versions are independent; changing one does not imply a version
-> change to the others.
+> before `1.0.0`.
 
 **Opalinx** is a lightweight binary protocol that allows interfacing with compatible LED controllers
 over a reliable byte stream (typically, serial over USB).
@@ -23,8 +21,7 @@ Both 3-component (RGB) and 4-component (RGBW) chips are supported.
 
 **Opalinx** assumes a trusted, single-client transport binding that presents a reliable, ordered byte
 stream. The core protocol does not define retransmission, duplicate suppression, network addressing,
-authentication, or fixture personality modeling. Packet and unreliable transports require a
-separate binding and are not core Opalinx 1.0 transports.
+authentication, or fixture personality modeling.
 
 
 ## Conventions
@@ -981,39 +978,6 @@ The following standard identifiers denote direct core-stream bindings:
 - **`tcp`**: One Opalinx session occupies one established TCP connection. Frames are carried unchanged
   over the connection's byte stream.
 - **`bluetooth-spp`**: Frames are carried unchanged over one Bluetooth RFCOMM/SPP stream.
-
-### Packet and non-stream transports
-
-UDP and Bluetooth LE GATT are not standard Opalinx 1.0 core bindings. Merely placing one encoded frame
-in a datagram, characteristic write, or notification does not supply the ordering and reliability
-contract the protocol requires.
-
-A future standard packet binding—or a vendor-defined experimental binding—must define at least:
-
-- mapping between Opalinx frames and packets;
-- maximum transmission unit and fragmentation/reassembly;
-- packet and fragment ordering;
-- loss detection, acknowledgement, and retransmission;
-- duplicate detection and suppression, especially for non-idempotent requests;
-- session establishment, peer identity, and reconnection behavior;
-- backpressure and maximum outstanding data;
-- delivery and timeout behavior for responses and unsolicited errors.
-
-Until such a binding is published, an implementation using UDP, BLE GATT, or another non-stream
-transport MUST use a vendor-namespaced `transport` identifier such as
-`vendor.example/udp-binding-v1`; it MUST NOT report the unqualified identifiers `udp` or
-`bluetooth-le` or claim conformance to a standard Opalinx binding. Its binding document is responsible
-for presenting reliable ordered frame delivery to the Opalinx layer.
-
-**Timeouts**: Opalinx does not define host timeout values. A host MAY impose response timeouts
-appropriate to its transport and application. `SHOW_ACK` and `RESET_ACK` are emitted only after the
-physical operation completes, so their latency can be longer than that of query or configuration
-responses. A timeout is a local observation: it does not prove that the request was rejected or that
-an accepted state-changing operation did not complete. A transport binding MAY publish timing
-guidance without changing the core protocol.
-
-Future versions may define additional stream or packet bindings without changing the core frame
-format, provided each binding supplies the delivery contract above.
 
 
 ## Conformance
