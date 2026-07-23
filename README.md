@@ -618,6 +618,7 @@ Sent in response to [`Request Device Information`](#request-device-information-0
 | Hardware platform       | variable | Processor, module, or execution platform used by the device |
 | Transport length        | 1 byte   | Length in bytes of the following UTF-8 identifier (`1`–`63`) |
 | Transport               | variable | Active transport carrying this OPAL connection              |
+| Extensions              | variable | Zero or more trailing TLV records; may be empty              |
 
 `max_in_flight_frames` is fixed at `2` in OPAL 1.0. It confirms that the device implements this
 revision's pipeline model—one active and one queued `Show`—but does not negotiate the host's pipeline
@@ -668,6 +669,41 @@ namespaced identifier such as `vendor.example/custom-link`. Clients MUST accept 
 transport identifiers and MUST NOT reject a device because its transport is unrecognized. The
 transport string identifies the binding only; it MUST NOT contain link speed, driver, adapter, or
 other diagnostic details.
+
+#### INFO extensions
+
+After the `transport` string, the remainder of the INFO payload is an extension area containing zero
+or more type-length-value (TLV) records. The empty extension area used by existing OPAL 1.0 devices is
+valid. Each record has this structure:
+
+| Field  | Size     | Description                                      |
+|--------|----------|--------------------------------------------------|
+| Type   | 1 byte   | Extension type identifier                        |
+| Length | 2 bytes  | Value length in bytes, unsigned little-endian    |
+| Value  | variable | Exactly `length` bytes                           |
+
+Type assignments are divided into these ranges:
+
+| Range           | Purpose                                                     |
+|-----------------|-------------------------------------------------------------|
+| `0x00`          | Reserved; senders MUST NOT emit                              |
+| `0x01`–`0x7F`   | Standard extensions assigned by future OPAL specifications   |
+| `0x80`–`0xFF`   | Vendor-specific extensions                                   |
+
+The outer INFO payload length terminates the extension area; no end marker or padding is permitted.
+Every record, including an unknown record, MUST fit completely within that payload. A truncated TLV
+header, a value shorter than its declared length, or trailing bytes that cannot form a complete TLV
+make the INFO response malformed and MUST cause the host to reject it.
+
+Hosts MUST parse through the entire extension area and MUST skip unknown extension types using their
+declared lengths. Unknown standard or vendor extensions MUST NOT make an otherwise compatible device
+fail discovery. A sender MUST NOT repeat an extension type unless that extension's definition
+explicitly permits repetition. A host MUST reject duplicate instances of a known non-repeatable type;
+it MAY preserve or expose unknown records, including repeated unknown types, for diagnostics.
+
+No standard INFO extension types are assigned in OPAL 1.0. Adding a standard TLV is additive: it does
+not change the offsets or interpretation of the fixed fields above. Changing, removing, or reordering
+a fixed field is not an additive extension and requires an incompatible protocol revision.
 
 **Capability flags** (bit positions within the 32-bit little-endian field):
 
