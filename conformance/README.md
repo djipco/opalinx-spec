@@ -21,4 +21,4 @@ Changes to existing vectors are protocol changes. Additive vectors may clarify
 already-specified behavior, but they must be reviewed against every maintained
 implementation. CI consumers should pin an exact `opalinx-spec` commit.
 
-`schema.json` defines the corpus format. It uses JSON Schema draft 2020-12.
+The `schema.json` file defines the corpus format. It uses JSON Schema draft 2020-12.
