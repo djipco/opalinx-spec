@@ -291,6 +291,31 @@ convention:
 - `N` through `254`: invalid. Implementations MUST reject messages specifying these values by
   emitting an `ERROR` response with code `ERR_INVALID_PARAMETER`.
 
+`N` MUST be in the range `1`–`255`, so Opalinx 1.0 addresses at most 255 numbered channels
+(`0`–`254`) on one device. The value `255` always means broadcast and MUST NOT be reinterpreted as a
+numbered channel by an extension.
+
+### Addressing limits and future expansion
+
+Opalinx 1.0 deliberately uses compact fixed-width addressing:
+
+| Resource | 1.0 limit | Consequence |
+|----------|-----------|-------------|
+| Numbered channels per device | 255 | Channel indices `0`–`254`; `255` remains broadcast |
+| LEDs per channel | 65,535 | Valid configured indices are `0`–`65,534` |
+| Pixel offset and count | 16 bits each | One `Set Pixels` span cannot end beyond exclusive index `65,535` |
+
+Implementations MUST evaluate `LED_offset + LED_count` in arithmetic wide enough to detect overflow;
+wrapping 16-bit addition MUST NOT make an invalid span appear valid.
+
+These are addressing limits, not recommended installation sizes. Larger installations can use
+multiple devices without adding overhead to the normal 1.0 streaming path. If a future specification
+needs more channels or pixels per channel, it MUST define a dedicated discovery descriptor and new
+request/response messages with wider fields. It MUST NOT change the meaning of the existing
+`channel_count`, channel byte, `LED_offset`, `LED_count`, CONFIG entry, or broadcast sentinel. A
+device implementing such an extension MUST still expose a valid, independently usable 1.0 view of no
+more than 255 channels through the existing INFO and CONFIG messages.
+
 
 ## Request Messages
 
@@ -719,7 +744,7 @@ Sent in response to [`Request Device Information`](#request-device-information-0
 | Protocol version major  | 1 byte   | Major version of the **Opalinx** protocol                      |
 | Protocol version minor  | 1 byte   | Minor version of the **Opalinx** protocol                      |
 | Protocol version patch  | 1 byte   | Patch version of the **Opalinx** protocol                      |
-| Channel count           | 1 byte   | Number of LED channels (`N`) supported by the device        |
+| Channel count           | 1 byte   | Number of 1.0-addressable channels (`N`), `1`–`255`          |
 | Capability flags        | 4 bytes  | Bitfield, little-endian; see capability bits below          |
 | Max payload length      | 2 bytes  | Max accepted payload, little-endian; MUST be ≥ 8, or ≥ 9 with `CAP_RGBW` |
 | Max LEDs (RGB)          | 2 bytes  | Max LEDs per channel in a 3-component order, little-endian; `0` = not advertised |
@@ -886,6 +911,10 @@ Each entry has the following structure:
 | Color order      | 1 byte  | Encoding matches the `Configure Device` message       |
 | Protocol         | 1 byte  | Encoding matches the `Configure Device` message       |
 | LED count        | 2 bytes | 16-bit unsigned integer, little-endian                |
+
+Each CONFIG LED count is in the range `1`–`65535`. The number of entries is exactly the INFO
+`channel_count`; therefore a conformant 1.0 CONFIG payload contains `1`–`255` entries and is at most
+1020 bytes.
 
 ### PONG (`0x83`)
 
