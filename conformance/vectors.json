@@ -1,6 +1,6 @@
 {
   "$schema": "./schema.json",
-  "corpus_version": 4,
+  "corpus_version": 5,
   "protocol_version": "1.0.0",
   "valid_frames": [
     {
@@ -42,14 +42,6 @@
       "payload_hex": "ff",
       "decoded_hex": "2222500100ff94a0",
       "wire_hex": "052222500104ff94a000"
-    },
-    {
-      "name": "pong_empty_payload",
-      "tx_id": 8738,
-      "identifier": 131,
-      "payload_hex": "",
-      "decoded_hex": "222283000017e5",
-      "wire_hex": "04222283010317e500"
     },
     {
       "name": "info_with_unknown_extension",

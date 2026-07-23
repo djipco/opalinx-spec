@@ -340,8 +340,8 @@ more than 255 channels through the existing INFO and CONFIG messages.
 ### Request Device Information (`0x01`)
 
 Queries the device for its identity and protocol compatibility. Clients MUST obtain and validate
-INFO before sending state-changing or vendor requests in a new session. INFO, CONFIG queries, and
-Ping may otherwise be sent in any order.
+INFO before sending state-changing or vendor requests in a new session. INFO and CONFIG queries may
+otherwise be sent in either order.
 
 | TRANSACTION ID | IDENTIFIER | PAYLOAD LENGTH | CHECKSUM |
 |----------------|------------|----------------|----------|
@@ -358,17 +358,6 @@ Queries the device for its current configuration.
 | 2 bytes        | `0x02`     | `0x00` `0x00`  | 2 bytes  |
 
 **Response**: [`CONFIG`](#config-0x82-0xa0) (`0x82`).
-
-### Ping (`0x03`)
-
-Checks that the device is present and responsive. Clients MAY send this at any time after
-connection establishment to verify connectivity or measure round-trip latency.
-
-| TRANSACTION ID | IDENTIFIER | PAYLOAD LENGTH | CHECKSUM |
-|----------------|------------|----------------|----------|
-| 2 bytes        | `0x03`     | `0x00` `0x00`  | 2 bytes  |
-
-**Response**: [`PONG`](#pong-0x83).
 
 ### Configure Device (`0x20`)
 
@@ -626,7 +615,7 @@ pipeline or pixel state.
 | `Set Pixels`, `Fill Channel` | Accept | Accept for the next frame | `ERR_BUSY` |
 | `Show` | Start and enter `ACTIVE` | Capture as pending and enter `ACTIVE_PENDING` | `ERR_BUSY` |
 | `Configure Device`, `Reset` | Accept | `ERR_BUSY` | `ERR_BUSY` |
-| Query and `Ping` requests | Accept | Accept | Accept |
+| Query requests | Accept | Accept | Accept |
 
 The table applies after message-specific length, parameter, capability, and device-operational
 checks. For example, an invalid channel produces `ERR_INVALID_PARAMETER`, not `ERR_BUSY`. Vendor
@@ -856,14 +845,6 @@ Each CONFIG LED count is in the range `1`–`65535`. The number of entries is ex
 `channel_count`; therefore a conformant 1.0 CONFIG payload contains `1`–`255` entries and is at most
 1020 bytes.
 
-### PONG (`0x83`)
-
-Sent in response to [`Ping`](#ping-0x03).
-
-| TRANSACTION ID | IDENTIFIER | PAYLOAD LENGTH | CHECKSUM |
-|----------------|------------|----------------|----------|
-| 2 bytes        | `0x83`     | `0x00` `0x00`  | 2 bytes  |
-
 ### SET_PIXELS_ACK (`0xC0`)
 
 Sent in response to a successful [`Set Pixels`](#set-pixels-0x40) request with `TxID ≠ 0x0000`,
@@ -1014,7 +995,7 @@ started, it MUST be allowed to finish, but its old-session acknowledgement is di
 cancellation is the sole exception; no other accepted operation is rolled back.
 
 Consequently, a newly connected host MUST NOT assume power-on defaults or known staging contents. It
-MAY send INFO, CONFIG-query, and Ping requests in any order, but MUST obtain compatible INFO before
+MAY send INFO and CONFIG-query requests in either order, but MUST obtain compatible INFO before
 sending configuration, pixel, Show, Reset, or vendor requests. It SHOULD request the current
 configuration and MUST overwrite or reset pixel state before issuing a `Show` unless intentionally
 preserving the previous session's content. A `Reset` remains the explicit operation for restoring
@@ -1088,7 +1069,7 @@ baseline is:
 
 | Request or mode | Conformance requirement |
 |-----------------|-------------------------|
-| Device information, configuration query, and Ping | Mandatory |
+| Device information and configuration query | Mandatory |
 | Broadcast Configure using any assigned 3-component order and protocol `0x00` | Mandatory |
 | Set Pixels and Fill Channel for valid configured channels | Mandatory |
 | Broadcast Show | Mandatory |
@@ -1118,7 +1099,6 @@ An implementation is considered **Opalinx** 1.0 conformant if it:
 - Responds to `Configure Device` with a `CONFIG` response on success or an appropriate `ERROR`
   response on failure; on success, clears the pixel buffer of every affected channel to all-zeros
   atomically (for broadcast, either all channels are updated or none).
-- Responds to `Ping` with a `PONG` response.
 - Responds to `Reset` with a `RESET_ACK` response after LED transmission completes, and rejects a
   `Reset` received during active transmission with `ERR_BUSY`.
 - Implements the one-Show backlog, admission, frame-protection, completion, and acknowledgement
