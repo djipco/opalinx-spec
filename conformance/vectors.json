@@ -68,6 +68,14 @@
       "wire_hex": "0501508108020101020102090401e5ff00"
     },
     {
+      "name": "info_with_invalid_utf8",
+      "tx_id": 20482,
+      "identifier": 129,
+      "payload_hex": "01000001000900010300010000020100ff",
+      "decoded_hex": "025081110001000001000900010300010000020100ff232d",
+      "wire_hex": "05025081110201010201020903010302010103020104ff232d00"
+    },
+    {
       "name": "namespaced_vendor_request",
       "tx_id": 13124,
       "identifier": 127,
@@ -218,6 +226,11 @@
       "outcome": { "reject": "malformed_info_records" }
     },
     {
+      "name": "invalid_utf8_is_rejected",
+      "frame": "info_with_invalid_utf8",
+      "outcome": { "reject": "invalid_utf8" }
+    },
+    {
       "name": "config_entry_count_is_session_bound",
       "frame": "config_query_response",
       "context": { "expected_channel_count": 2 },
@@ -301,6 +314,10 @@
         {
           "input": { "tx_id": 8452, "identifier": 127, "payload_hex": "012e0000" },
           "expect": { "responses": [{ "tx_id": 8452, "identifier": 224, "payload_hex": "037f" }] }
+        },
+        {
+          "input": { "tx_id": 8453, "identifier": 127, "payload_hex": "04612e2e620000" },
+          "expect": { "responses": [{ "tx_id": 8453, "identifier": 224, "payload_hex": "037f" }] }
         }
       ]
     },

@@ -107,7 +107,7 @@
               "type": "object",
               "required": ["reject"],
               "properties": {
-                "reject": { "enum": ["malformed_info_records", "config_entry_count_mismatch"] }
+                "reject": { "enum": ["malformed_info_records", "invalid_utf8", "config_entry_count_mismatch"] }
               },
               "additionalProperties": false
             }

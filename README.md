@@ -389,9 +389,9 @@ forming the request.
 - `LED_offset` MUST be less than the configured number of LEDs on the target channel.
 - `LED_offset + LED_count` MUST be less than or equal to the configured number of LEDs on the
   target channel.
-- For broadcast pixel operations (`Channel number = 255`), all targeted channels MUST share
-  compatible color orders, and each targeted channel's configured LED count MUST be at least
-  `LED_offset + LED_count`; otherwise the message MUST be rejected.
+- For broadcast pixel operations (`Channel number = 255`), every targeted channel MUST have the
+  same configured color-order value, and each targeted channel's configured LED count MUST be at
+  least `LED_offset + LED_count`; otherwise the message MUST be rejected.
 
 Any rejected `Set Pixels` message MUST be rejected atomically; no channel's buffer may be modified.
 A rejected request with a nonzero transaction ID produces one `ERROR` response.
@@ -438,9 +438,9 @@ example, on a `GRB` channel the three bytes represent G, R, B in that order.
   resolved. Violations are therefore reported as `ERR_INVALID_PARAMETER` rather than
   `ERR_INVALID_PAYLOAD_LENGTH`; this is an intentional exception to the general validation-order
   rule.)*
-- For broadcast, any targeted channel's configured color order is not compatible with the supplied
-  wire bytes. Because the same bytes are written verbatim to every channel, all targeted channels
-  MUST share compatible color orders (not merely a matching component count).
+- For broadcast, the targeted channels do not all have the same configured color-order value.
+  Matching component counts alone are insufficient because the same bytes are written verbatim to
+  every channel.
 
 Any rejected `Fill Channel` message MUST be rejected atomically; no channel's buffer may be
 modified as a result of a rejected message.
@@ -452,8 +452,8 @@ no response if `TxID = 0x0000`. Emits [`ERROR`](#error-0xe0) on failure only if 
 
 ### Show (`0x50`)
 
-Commits buffered channel data (from `Set Pixels` and `Fill Channel`) to all physical LED channels
-simultaneously.
+Commits buffered channel data (from `Set Pixels` and `Fill Channel`) to all physical LED channels as
+one coordinated output operation.
 
 | TRANSACTION ID | IDENTIFIER | PAYLOAD LENGTH | PAYLOAD                  | CHECKSUM |
 |----------------|------------|----------------|--------------------------|----------|
@@ -463,16 +463,17 @@ simultaneously.
 
 - `0` through `N-1`: reserved for future per-channel transmission; devices MUST reject with
   `ERR_UNSUPPORTED`.
-- `255`: broadcast. Commits all channels simultaneously, guaranteeing synchronized multi-channel
-  updates without inter-channel tearing. Devices MUST start all channel transmissions at the same
-  time; this is a hardware conformance requirement.
+- `255`: broadcast. Captures and commits all channels as one coordinated output operation. Every
+  channel MUST transmit the data captured for that Show; no channel may transmit data captured by a
+  different Show as part of the operation. Physical timing skew between channels is device-defined.
 
 **Buffer persistence**: Each channel's buffer is initialized to all-zeros at power-on and persists
 across `Show` messages, being overwritten only by subsequent `Set Pixels` or `Fill Channel`
 messages targeting that channel, or cleared by a successful `Configure Device`.
 
-**Response**: Emits [`SHOW_ACK`](#show_ack-0xd0) after LED transmission completes if
-`TxID ≠ 0x0000`; no response if `TxID = 0x0000`. Emits [`ERROR`](#error-0xe0) on failure only if
+**Response**: Emits [`SHOW_ACK`](#show_ack-0xd0) after every channel's transmission and required
+reset/latch interval complete if `TxID ≠ 0x0000`; no response if `TxID = 0x0000`. Emits
+[`ERROR`](#error-0xe0) on failure only if
 `TxID ≠ 0x0000`. Hosts that use a non-zero `TxID` for `Show` and wait for `SHOW_ACK` before
 issuing the next `Show` are guaranteed never to receive `ERR_BUSY`. `SHOW_ACK` provides an observable
 completion boundary for pacing under [Frame Pipelining](#frame-pipelining); a Show with
@@ -503,8 +504,8 @@ governed by this table, its vendor contract MUST identify the equivalent core op
 request MUST follow that operation's admission rule. Other vendor requests define their own
 admission rules.
 
-An active Show completes after physical transmission, including the reset/latch interval required by
-the selected signaling protocol. When it completes:
+An active Show completes after every affected channel has completed physical transmission, including
+the reset/latch interval required by its selected signaling protocol. When it completes:
 
 - with no pending Show, the device enters `IDLE`;
 - with a pending Show, the device starts it and enters `ACTIVE`.
@@ -525,20 +526,26 @@ clears all channel buffers to zero, and outputs zeros to the physical LEDs.
 completes, or [`ERROR`](#error-0xe0) on failure. A Reset carrying transaction ID zero produces no
 response.
 
+After accepting a Reset, the device MUST complete it before processing any subsequent request. If
+the Reset has a nonzero transaction ID, `RESET_ACK` is therefore emitted before any response to a
+later request. A Reset with transaction ID zero imposes the same ordering barrier despite producing
+no response.
+
 ### Namespaced Vendor Request (`0x7F`)
 
 Carries an extension command without consuming a globally shared identifier. Its payload is:
 
 | Field            | Size      | Description                                       |
 |------------------|-----------|---------------------------------------------------|
-| Namespace length | 1 byte    | Namespace length `1`–`63`                         |
+| Namespace length | 1 byte    | Namespace length `3`–`63`                         |
 | Namespace        | variable  | Lowercase ASCII reverse-DNS name                  |
 | Command ID       | 2 bytes   | Vendor-assigned identifier, little-endian         |
 | Vendor payload   | remaining | Defined by the namespace and command; may be empty |
 
-A namespace contains only lowercase ASCII letters, digits, hyphens, and periods; its first and last
-characters MUST be a letter or digit. The owner of a DNS name controls its reverse-DNS namespace,
-such as `com.example.lighting`. Command IDs are assigned independently within each namespace.
+A namespace consists of at least two dot-separated labels and is 3–63 bytes long. Each label MUST
+begin and end with a lowercase ASCII letter or digit; interior characters may also be hyphens. Empty
+labels are forbidden. The owner of a DNS name controls its reverse-DNS namespace, such as
+`com.example.lighting`. Command IDs are assigned independently within each namespace.
 
 A device that does not implement the namespace or command MUST return `ERR_UNSUPPORTED`. Invalid
 envelope structure produces `ERR_INVALID_PAYLOAD_LENGTH`; an invalid namespace produces
@@ -640,6 +647,10 @@ standard records in ascending type order for deterministic diagnostics. Adding a
 additive and does not change the offsets or interpretation of the fixed prefix. Changing, removing,
 or reordering a fixed field requires an incompatible protocol revision.
 
+Every standard INFO string record MUST contain well-formed UTF-8. An invalid UTF-8 sequence makes
+the INFO response malformed and the host MUST reject it. Length limits count encoded bytes; no
+Unicode normalization form is required. Records defined as opaque data are unaffected.
+
 When present, `hardware_revision`, `hardware_platform`, and `transport` are non-empty UTF-8 strings
 of at most 63 bytes. Omission means that the information is unavailable. Hardware revision is
 manufacturer-defined; examples include `Rev A` and `1.2`.
@@ -740,8 +751,8 @@ confirming that the fill has been buffered.
 
 ### SHOW_ACK (`0xD0`)
 
-Sent in response to a successful [`Show`](#show-0x50) request with `TxID ≠ 0x0000`, after LED
-transmission has completed.
+Sent in response to a successful [`Show`](#show-0x50) request with `TxID ≠ 0x0000`, after every
+affected channel's transmission and required reset/latch interval have completed.
 
 | TRANSACTION ID | IDENTIFIER | PAYLOAD LENGTH | CHECKSUM |
 |----------------|------------|----------------|----------|
@@ -861,7 +872,8 @@ An implementation is considered **Opalinx** 1.0 conformant if it:
   response on failure; on success, clears the pixel buffer of every affected channel to all-zeros
   atomically (for broadcast, either all channels are updated or none).
 - Responds to `Reset` with a `RESET_ACK` response after LED transmission completes, and rejects a
-  `Reset` received during active transmission with `ERR_BUSY`.
+  `Reset` received during active transmission with `ERR_BUSY`; an accepted Reset completes before
+  any subsequent request is processed.
 - Implements the one-Show backlog, admission, frame-protection, completion, and acknowledgement
   guarantees defined in [Frame Pipelining](#frame-pipelining).
 - Sends `SET_PIXELS_ACK`, `FILL_CHANNEL_ACK`, and `SHOW_ACK` responses for pixel and show
@@ -886,7 +898,8 @@ A typical client session driving 300 RGB LEDs per channel on an 8-channel device
    (300 × 3) of pixel data.
 5. Client sends `Set Pixels` with transaction ID zero for channels 1 through 7 in the same manner.
 6. Client sends `Show` (`0x50`) with a new nonzero transaction ID and channel `255` to commit all
-   eight channels simultaneously. It waits for the corresponding `SHOW_ACK` (`0xD0`).
+   eight channels as one coordinated output operation. It waits for the corresponding `SHOW_ACK`
+   (`0xD0`).
 7. Client repeats steps 4–6 for each new frame, using a new nonzero Show transaction ID each time.
 
 For installations where all channels display the same content (mirror mode), steps 4–5 collapse
