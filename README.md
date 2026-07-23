@@ -19,11 +19,6 @@ Both 3-component (RGB) and 4-component (RGBW) chips are supported.
 > Two-wire protocols such as **APA102** (DotStar) and **WS2801** are not currently in scope for
 > this specification.
 
-**Opalinx** assumes a trusted, single-client transport binding that presents a reliable, ordered byte
-stream. The core protocol does not define retransmission, duplicate suppression, network addressing,
-authentication, or fixture personality modeling.
-
-
 ## Conventions
 
 - **Key words**: **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**, and **MAY** are used as
@@ -33,28 +28,9 @@ authentication, or fixture personality modeling.
 
 - **Strings**: UTF-8 encoded with a length prefix, not null-terminated.
 
-- **Reserved and unassigned values**: There is no blanket "ignore reserved data" rule. The field or
-  container definition determines whether an unknown value is ignored, preserved, or rejected. The
-  common cases are:
-
-  | Category | Sender rule | Receiver rule |
-  |----------|-------------|---------------|
-  | Reserved bits in an explicitly extensible bitfield | Send zero | Ignore unknown bits |
-  | Unassigned value in a request enum | Do not send | Reject with `ERR_INVALID_PARAMETER` |
-  | Assigned but unsupported request value | Send only after discovery or probing | Reject with `ERR_UNSUPPORTED` |
-  | Reserved request/response identifier | Do not send | Apply the identifier/direction rules |
-  | Reserved structural sentinel, such as INFO type `0x00` | Do not send | Treat as malformed |
-  | Unknown length-delimited extension | Send only when assigned | Skip by its declared length |
-  | Unknown value in a forward-readable response enum | Allowed for newer senders | Preserve numerically |
-
-  A future definition that introduces a reserved byte or multi-byte field MUST state its sender and
-  receiver behavior explicitly. Merely labeling a field "reserved" does not authorize a receiver to
-  ignore nonzero contents.
-
-- **Versioning**: Specification releases follow
-  [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html), subject to the compact wire
-  representation described below. Package and firmware release versions are independent.
-
+- **Reserved and unassigned values**: Senders and receivers MUST follow the rules stated by the field
+  or message definition. A value being reserved or unassigned does not, by itself, imply that it
+  should be ignored.
 
 ## Versioning and wire compatibility
 
@@ -967,17 +943,8 @@ Bindings define observable boundaries as follows:
 - `bluetooth-spp`: a session is one established RFCOMM channel;
 - `uart`: UART has no intrinsic open/close event. One session begins when the device initializes the
   link and continues until device/link reset, unless the binding documents an out-of-band boundary
-  signal. Merely reopening a host serial handle does not create a device-observable new session.
-
-The following standard identifiers denote direct core-stream bindings:
-
-- **`usb-cdc`**: Opalinx frames are carried unchanged over a USB CDC byte stream.
-- **`uart`**: Opalinx frames are carried unchanged over a hardware UART. Its documented operating
-  mode MUST meet the core stream contract. A UART overrun is a transport failure even if frame
-  parsing later resynchronizes.
-- **`tcp`**: One Opalinx session occupies one established TCP connection. Frames are carried unchanged
-  over the connection's byte stream.
-- **`bluetooth-spp`**: Frames are carried unchanged over one Bluetooth RFCOMM/SPP stream.
+  signal. Merely reopening a host serial handle does not create a device-observable new session. A
+  UART overrun is a transport failure even if frame parsing later resynchronizes.
 
 
 ## Conformance
@@ -1030,8 +997,7 @@ An implementation is considered **Opalinx** 1.0 conformant if it:
   guarantees defined in [Frame Pipelining](#frame-pipelining).
 - Sends `SET_PIXELS_ACK`, `FILL_CHANNEL_ACK`, and `SHOW_ACK` responses for pixel and show
   operations received with `TxID ≠ 0x0000`.
-- Applies the field-specific unknown, reserved, and extension handling rules in
-  [Conventions](#conventions).
+- Applies all field-specific reserved and unknown-value rules.
 - Recognizes the namespaced vendor envelope and returns `ERR_UNSUPPORTED` for an unimplemented
   namespace or command.
 - Rejects identifiers in reserved request ranges with `ERR_UNKNOWN_IDENTIFIER`.
