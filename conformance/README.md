@@ -11,10 +11,11 @@ order. A valid-frame entry contains all three views of the same message:
 - `decoded_hex`: the frame after COBS decoding, including its header and CRC;
 - `wire_hex`: the COBS-encoded frame including the final `00` delimiter.
 
-Invalid decoded-frame entries state which validation must fail first. Stream
-entries describe chunk boundaries and the ordered outcomes produced by a
-streaming decoder. Error names are stable corpus vocabulary rather than exact
-exception text required of an implementation.
+Invalid decoded-frame entries list every safe diagnostic category accepted for that malformed input.
+An implementation must reject the input, but host check order and local diagnostic precedence are
+not wire-visible. Stream entries describe chunk boundaries and the ordered outcomes produced by a
+streaming decoder. Diagnostic names are stable corpus vocabulary rather than exact exception text
+required of an implementation.
 
 Changes to existing vectors are protocol changes. Additive vectors may clarify
 already-specified behavior, but they must be reviewed against every maintained

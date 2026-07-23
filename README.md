@@ -182,9 +182,13 @@ checksum were never retained, so CRC validation is impossible. An oversized fram
 silent discard at its terminating delimiter and MUST NOT affect previously accepted protocol or pixel
 state.
 
-A host receiving malformed device output MUST apply the same framing boundaries and validation order,
-discard the malformed candidate, and continue at the next delimiter. It reports the failure locally;
-it MUST NOT send an `ERROR` response to a malformed response, which avoids error-response loops.
+A host receiving device output MUST apply the same bounded framing and delimiter recovery rules, but
+its internal validation order is not externally observable and need not match the device order above.
+Before accepting or correlating a response, it MUST validate COBS structure, minimum size, CRC,
+declared length, identifier/direction, and message-specific structure. It MUST treat the checksum as
+the final two decoded bytes rather than locating it through the untrusted payload-length field, and
+MUST NOT allocate unbounded storage from an unverified length. A failure is reported locally; the host
+discards the candidate, continues at the next delimiter, and MUST NOT send an `ERROR` response.
 
 **Fields**:
 
@@ -1195,8 +1199,9 @@ inputs unless that limitation is itself defined and advertised by the feature's 
 An implementation is considered **Opalinx** 1.0 conformant if it:
 
 - Recognizes all standard request messages and supports the mandatory baseline above.
-- Implements the bounded accumulation, oversized-frame discard, delimiter recovery, and exact
-  validation order defined in [Receiver Framing and Recovery](#receiver-framing-and-recovery).
+- Device implementations use the exact rejection precedence defined in
+  [Receiver Framing and Recovery](#receiver-framing-and-recovery); host implementations satisfy its
+  safe-acceptance requirements without needing the same internal check order.
 - Implements the session-boundary cleanup and persistent device state defined in
   [Connection and session boundaries](#connection-and-session-boundaries).
 - Silently discards oversized, undecodable, short, and checksum-invalid candidates without affecting

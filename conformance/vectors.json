@@ -1,6 +1,6 @@
 {
   "$schema": "./schema.json",
-  "corpus_version": 1,
+  "corpus_version": 2,
   "protocol_version": "1.0.0",
   "valid_frames": [
     {
@@ -77,10 +77,10 @@
     }
   ],
   "invalid_decoded_frames": [
-    { "name": "empty_decoded_frame", "decoded_hex": "", "error": "frame_too_short" },
-    { "name": "three_byte_decoded_frame", "decoded_hex": "010203", "error": "frame_too_short" },
-    { "name": "bad_crc_precedes_length_check", "decoded_hex": "34128301000000", "error": "crc_mismatch" },
-    { "name": "crc_valid_payload_length_mismatch", "decoded_hex": "34128301001033", "error": "payload_length_mismatch" }
+    { "name": "empty_decoded_frame", "decoded_hex": "", "acceptable_errors": ["frame_too_short"] },
+    { "name": "three_byte_decoded_frame", "decoded_hex": "010203", "acceptable_errors": ["frame_too_short"] },
+    { "name": "bad_crc_and_length_mismatch", "decoded_hex": "34128301000000", "acceptable_errors": ["crc_mismatch", "payload_length_mismatch"] },
+    { "name": "crc_valid_payload_length_mismatch", "decoded_hex": "34128301001033", "acceptable_errors": ["payload_length_mismatch"] }
   ],
   "streams": [
     {

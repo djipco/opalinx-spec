@@ -6,7 +6,7 @@
   "required": ["corpus_version", "protocol_version", "valid_frames", "invalid_decoded_frames", "streams"],
   "properties": {
     "$schema": { "type": "string" },
-    "corpus_version": { "const": 1 },
+    "corpus_version": { "const": 2 },
     "protocol_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
     "valid_frames": { "type": "array", "items": { "$ref": "#/$defs/validFrame" } },
     "invalid_decoded_frames": { "type": "array", "items": { "$ref": "#/$defs/invalidFrame" } },
@@ -31,11 +31,16 @@
     },
     "invalidFrame": {
       "type": "object",
-      "required": ["name", "decoded_hex", "error"],
+      "required": ["name", "decoded_hex", "acceptable_errors"],
       "properties": {
         "name": { "$ref": "#/$defs/name" },
         "decoded_hex": { "$ref": "#/$defs/hex" },
-        "error": { "enum": ["frame_too_short", "crc_mismatch", "payload_length_mismatch"] }
+        "acceptable_errors": {
+          "type": "array",
+          "items": { "enum": ["frame_too_short", "crc_mismatch", "payload_length_mismatch"] },
+          "minItems": 1,
+          "uniqueItems": true
+        }
       },
       "additionalProperties": false
     },
