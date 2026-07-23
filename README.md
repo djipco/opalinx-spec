@@ -208,6 +208,17 @@ numbered channel by an extension.
 
 ## Request Messages
 
+| Identifier | Request | Paired success response |
+|------------|---------|-------------------------|
+| `0x01` | [Request Device Information](#request-device-information-0x01) | [`INFO`](#info-0x81) (`0x81`) |
+| `0x02` | [Request Device Configuration](#request-device-configuration-0x02) | [`CONFIG`](#config-0x82-0xa0) (`0x82`) |
+| `0x20` | [Configure Device](#configure-device-0x20) | [`CONFIG`](#config-0x82-0xa0) (`0xA0`) |
+| `0x40` | [Set Pixels](#set-pixels-0x40) | [`SET_PIXELS_ACK`](#set_pixels_ack-0xc0) (`0xC0`) |
+| `0x41` | [Fill Channel](#fill-channel-0x41) | [`FILL_CHANNEL_ACK`](#fill_channel_ack-0xc1) (`0xC1`) |
+| `0x50` | [Show](#show-0x50) | [`SHOW_ACK`](#show_ack-0xd0) (`0xD0`) |
+| `0x51` | [Reset](#reset-0x51) | [`RESET_ACK`](#reset_ack-0xd1) (`0xD1`) |
+| `0x7F` | [Namespaced Vendor Request](#namespaced-vendor-request-0x7f) | [Namespaced Vendor Response](#namespaced-vendor-response-0xff) (`0xFF`) |
+
 ### Request Device Information (`0x01`)
 
 Queries the device for its identity and protocol compatibility. Clients MUST obtain and validate
@@ -232,9 +243,7 @@ Queries the device for its current configuration.
 
 ### Configure Device (`0x20`)
 
-Sets the LED color order, signaling protocol, and LED count for one channel, or for all channels
-simultaneously (broadcast). Clients SHOULD send this during initialization, before streaming any
-pixel data.
+Sets the LED color order, signaling protocol, and LED count for all channels simultaneously.
 
 | TX ID   | IDENTIFIER | PAYLOAD LENGTH | CHANNEL | COLOR ORDER | PROTOCOL | LED COUNT | CHECKSUM |
 |---------|------------|----------------|---------|-------------|----------|-----------|----------|
@@ -265,13 +274,9 @@ Values `0x00`–`0x05` are 3-component (RGB) and `0x06`–`0x1D` are 4-component
 are unassigned in 1.0 and MUST be rejected with `ERR_INVALID_PARAMETER`. Every device MUST support
 both 3-component and 4-component color orders. CONFIG readers
 MUST preserve and expose an unknown numeric color-order value rather than rejecting the entire
-response; a host MUST NOT send a color-order value it does not understand. A future pixel format
-with other than three or four components requires new pixel/configuration messages and MUST NOT
-reinterpret this field.
+response; a host MUST NOT send a color-order value it does not understand.
 
 **Protocol values**: select the WS281x signaling protocol — the chip family and its bit timing.
-(Named `protocol` rather than `speed` because the choice is a signaling variant, not merely a data
-rate.)
 
 | Value  | Protocol           |
 |--------|--------------------|
@@ -284,19 +289,16 @@ Every conformant device MUST support `0x00`. Support for other assigned values i
 understand, and SHOULD NOT request a value absent from that record. If the record is absent, only
 `0x00` is guaranteed; a host MAY probe another value and handle rejection.
 
-Future same-major specifications MAY assign new values additively. CONFIG readers MUST preserve and
-expose unknown numeric protocol values rather than rejecting the response. A device rejects an
-unassigned value with `ERR_INVALID_PARAMETER` and an assigned but unsupported value with
-`ERR_UNSUPPORTED`.
+CONFIG readers MUST preserve and expose unknown numeric protocol values rather than rejecting the
+response. A device rejects an unassigned value with `ERR_INVALID_PARAMETER` and an assigned but
+unsupported value with `ERR_UNSUPPORTED`.
 
 **LEDs on channel**: A 16-bit unsigned integer, little-endian. Devices MUST reject a value of
 `0` or any value exceeding their capacity with `ERR_INVALID_PARAMETER`.
 
-If `Configure Device` is not sent, implementations SHOULD default to GRB color order, the WS2811
-800 kHz protocol, and a device-specific default LED count. On success, `Configure Device` MUST clear the
-pixel buffer of every affected channel to all-zeros; hosts MUST NOT rely on buffer contents
-surviving a reconfiguration. A broadcast `Configure Device` MUST be applied atomically: either all
-channels are reconfigured and their buffers cleared, or no channel is modified.
+On success, `Configure Device` MUST clear the pixel buffer of every affected channel to all-zeros. A
+broadcast `Configure Device` MUST be applied atomically: either all channels are reconfigured and
+their buffers cleared, or no channel is modified.
 
 **Response**: [`CONFIG`](#config-0x82-0xa0) (`0xA0`, confirming the applied configuration) or
 [`ERROR`](#error-0xe0) if the requested configuration is not supported.
@@ -348,8 +350,7 @@ Any rejected `Set Pixels` message MUST be rejected atomically; no channel's buff
 A rejected request with a nonzero transaction ID produces one `ERROR` response.
 
 **Response**: Emits [`SET_PIXELS_ACK`](#set_pixels_ack-0xc0) on success if `TxID ≠ 0x0000`; no
-response if `TxID = 0x0000`. Emits [`ERROR`](#error-0xe0) on failure only if `TxID ≠ 0x0000`. For
-high-throughput streaming, `TxID = 0x0000` is recommended to avoid ACK overhead.
+response if `TxID = 0x0000`. Emits [`ERROR`](#error-0xe0) on failure only if `TxID ≠ 0x0000`.
 
 ### Fill Channel (`0x41`)
 
@@ -400,8 +401,7 @@ modified as a result of a rejected message.
 `Fill Channel` can be used to turn channels off (all components set to `0`) or to apply test colors.
 
 **Response**: Emits [`FILL_CHANNEL_ACK`](#fill_channel_ack-0xc1) on success if `TxID ≠ 0x0000`;
-no response if `TxID = 0x0000`. Emits [`ERROR`](#error-0xe0) on failure only if `TxID ≠ 0x0000`. For
-high-throughput streaming, `TxID = 0x0000` is recommended to avoid ACK overhead.
+no response if `TxID = 0x0000`. Emits [`ERROR`](#error-0xe0) on failure only if `TxID ≠ 0x0000`.
 
 ### Show (`0x50`)
 
@@ -435,51 +435,16 @@ completion or buffer-safety feedback.
 
 ### Frame Pipelining
 
-For Show completion and acknowledgement, physical transmission includes both LED data and the
-required reset/latch interval. Opalinx 1.0 uses a minimum reset/latch interval of `300 µs` for its
-assigned signaling protocols.
-
-> [!NOTE]
-> The following timing calculation is informative. It explains the motivation for pipelining but is
-> not a required implementation technique or a host timeout algorithm.
-
-> ```text
-> bits_per_led = components_per_led × 8
-> data_time    = LED_count × bits_per_led × bit_period
-> frame_time   = data_time + reset_time
-> ```
-
-> The assigned Opalinx protocol values use a `1.25 µs` bit period at 800 kHz and a `2.5 µs` bit
-> period at 400 kHz. Excluding the reset interval, one RGB LED therefore takes approximately `30 µs`
-> at 800 kHz or `60 µs` at 400 kHz; one RGBW LED takes approximately `40 µs` at 800 kHz or `80 µs`
-> at 400 kHz. A broadcast completes when its slowest affected channel completes.
-
-A host that waits for `SHOW_ACK` before issuing the next `Show` (the lock-step pattern above) leaves
-the device idle for one host round-trip at every frame boundary, because the device cannot begin the
-next frame until a new `Show` arrives. Frame pipelining removes that idle gap by letting the host
-queue the next `Show` while the current frame is still transmitting.
-
-**Opalinx 1.0 supports exactly one pending `Show`.** A device may have one `Show` transmitting and
-one additional `Show` waiting behind it. This fixed backlog is mandatory and requires no capability
-negotiation. A third `Show` is rejected with `ERR_BUSY`.
+Opalinx 1.0 supports one active `Show` and one pending `Show`. A third `Show` is rejected with
+`ERR_BUSY`.
 
 Accepting a `Show` logically captures the staged frame for that operation. Once captured, later
 requests cannot alter it. This is an observable frame-isolation guarantee, not a storage or
 processing requirement.
 
-The pipeline is global to the device, including when per-channel `Show` is supported:
-
-| State | Meaning |
-|-------|---------|
-| `IDLE` | No Show is transmitting or pending |
-| `ACTIVE` | One Show is transmitting; no Show is pending |
-| `ACTIVE_PENDING` | One Show is transmitting and one Show is pending |
-
-Pixel transmission includes the required reset/latch interval. The active Show does not complete
-until that interval ends.
-
-After validating a request, the device applies this admission table. Rejection does not change
-pipeline or pixel state.
+The admission table uses `IDLE` for no active Show, `ACTIVE` for one active Show, and
+`ACTIVE_PENDING` for one active and one pending Show. It applies after all request-specific
+validation. Rejection does not change pipeline or pixel state.
 
 | Request | `IDLE` | `ACTIVE` | `ACTIVE_PENDING` |
 |---------|--------|----------|------------------|
@@ -488,31 +453,16 @@ pipeline or pixel state.
 | `Configure Device`, `Reset` | Accept | `ERR_BUSY` | `ERR_BUSY` |
 | Query requests | Accept | Accept | Accept |
 
-The table applies after message-specific length, parameter, capability, and device-operational
-checks. For example, an invalid channel produces `ERR_INVALID_PARAMETER`, not `ERR_BUSY`. Vendor
-requests define their own admission rules.
+Vendor requests define their own admission rules.
 
-When the active Show completes:
+An active Show completes after physical transmission, including the reset/latch interval required by
+the selected signaling protocol. When it completes:
 
 - with no pending Show, the device enters `IDLE`;
 - with a pending Show, the device starts it and enters `ACTIVE`.
 
 Only after that transition does the device emit `SHOW_ACK` for the completed Show, if its transaction
-ID is nonzero. A `SHOW_ACK` therefore proves that the named Show has completed and that the host may
-prepare another frame. Show acknowledgements are emitted in accepted order.
-
-A pipelining host uses a distinct nonzero transaction ID for each outstanding Show and keeps no more
-than two Shows outstanding. Pixel updates may use transaction ID zero. The normal sequence is:
-
-1. Prepare and submit frame *N* with `Show(N)`.
-2. While *N* transmits, prepare and submit frame *N+1* with `Show(N+1)`.
-3. Wait for `SHOW_ACK(N)` before preparing frame *N+2*.
-
-Waiting for the final Show's acknowledgement drains the pipeline.
-
-A future specification may add a larger backlog or a different streaming model, but it MUST
-advertise that model explicitly and use separate messages. It MUST NOT change the behavior of the
-Opalinx 1.0 `Set Pixels`, `Fill Channel`, or `Show` messages.
+ID is nonzero. Show acknowledgements are emitted in accepted order.
 
 ### Reset (`0x51`)
 
@@ -554,6 +504,18 @@ All vendor-defined requests use this envelope. The reserved request and response
 used as private extension points.
 
 ## Response Messages
+
+| Identifier | Response | Request or condition |
+|------------|----------|----------------------|
+| `0x81` | [`INFO`](#info-0x81) | [Request Device Information](#request-device-information-0x01) |
+| `0x82` | [`CONFIG`](#config-0x82-0xa0) | [Request Device Configuration](#request-device-configuration-0x02) |
+| `0xA0` | [`CONFIG`](#config-0x82-0xa0) | [Configure Device](#configure-device-0x20) |
+| `0xC0` | [`SET_PIXELS_ACK`](#set_pixels_ack-0xc0) | [Set Pixels](#set-pixels-0x40) |
+| `0xC1` | [`FILL_CHANNEL_ACK`](#fill_channel_ack-0xc1) | [Fill Channel](#fill-channel-0x41) |
+| `0xD0` | [`SHOW_ACK`](#show_ack-0xd0) | [Show](#show-0x50) |
+| `0xD1` | [`RESET_ACK`](#reset_ack-0xd1) | [Reset](#reset-0x51) |
+| `0xE0` | [`ERROR`](#error-0xe0) | Rejected request with a nonzero transaction ID |
+| `0xFF` | [Namespaced Vendor Response](#namespaced-vendor-response-0xff) | [Namespaced Vendor Request](#namespaced-vendor-request-0x7f) |
 
 ### INFO (`0x81`)
 
@@ -885,6 +847,9 @@ Bindings define observable boundaries as follows:
 
 
 ## Conformance
+
+The canonical Opalinx wire examples are published in the
+[wire conformance corpus](conformance/README.md).
 
 For conformance, **recognize** means parsing the standard identifier, applying the specified
 validation order, and returning a specific result or error rather than `ERR_UNKNOWN_IDENTIFIER`.
