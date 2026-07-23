@@ -1,6 +1,6 @@
 {
   "$schema": "./schema.json",
-  "corpus_version": 5,
+  "corpus_version": 6,
   "protocol_version": "1.0.0-alpha.0",
   "valid_frames": [
     {
@@ -28,6 +28,14 @@
       "wire_hex": "02ab03400b010101020204140a1e0104ffc74000"
     },
     {
+      "name": "set_pixels_rgbw",
+      "tx_id": 16394,
+      "identifier": 64,
+      "payload_hex": "000000010001020304",
+      "decoded_hex": "0a404009000000000100010203043701",
+      "wire_hex": "050a40400901010102010701020304370100"
+    },
+    {
       "name": "fill_channel_broadcast",
       "tx_id": 65535,
       "identifier": 65,
@@ -52,12 +60,100 @@
       "wire_hex": "053412814b02010102020505100103010503010212154f70616c696e7820436f6e74726f6c6c6572030508526576204104080b45535033322d503405070a7573622d636463060301050102220306010203a6d300"
     },
     {
+      "name": "info_with_truncated_record_header",
+      "tx_id": 20481,
+      "identifier": 129,
+      "payload_hex": "0100000100090001",
+      "decoded_hex": "01508108000100000100090001e5ff",
+      "wire_hex": "0501508108020101020102090401e5ff00"
+    },
+    {
       "name": "namespaced_vendor_request",
       "tx_id": 13124,
       "identifier": 127,
       "payload_hex": "0f636f2e646a69702e6f70616c696e783412dead",
       "decoded_hex": "44337f14000f636f2e646a69702e6f70616c696e783412deadfda4",
       "wire_hex": "0544337f14170f636f2e646a69702e6f70616c696e783412deadfda400"
+    },
+    {
+      "name": "get_config_max_tx",
+      "tx_id": 65535,
+      "identifier": 2,
+      "payload_hex": "",
+      "decoded_hex": "ffff020000606e",
+      "wire_hex": "04ffff020103606e00"
+    },
+    {
+      "name": "reset",
+      "tx_id": 16385,
+      "identifier": 81,
+      "payload_hex": "",
+      "decoded_hex": "01405100003fbc",
+      "wire_hex": "0401405101033fbc00"
+    },
+    {
+      "name": "config_query_response",
+      "tx_id": 16386,
+      "identifier": 130,
+      "payload_hex": "02000200",
+      "decoded_hex": "024082040002000200746e",
+      "wire_hex": "05024082040202020203746e00"
+    },
+    {
+      "name": "config_set_response",
+      "tx_id": 16387,
+      "identifier": 160,
+      "payload_hex": "02000200",
+      "decoded_hex": "0340a0040002000200428b",
+      "wire_hex": "050340a0040202020203428b00"
+    },
+    {
+      "name": "set_pixels_ack",
+      "tx_id": 16388,
+      "identifier": 192,
+      "payload_hex": "",
+      "decoded_hex": "0440c0000061d0",
+      "wire_hex": "040440c0010361d000"
+    },
+    {
+      "name": "fill_channel_ack",
+      "tx_id": 16389,
+      "identifier": 193,
+      "payload_hex": "",
+      "decoded_hex": "0540c10000004d",
+      "wire_hex": "040540c10101024d00"
+    },
+    {
+      "name": "show_ack",
+      "tx_id": 16390,
+      "identifier": 208,
+      "payload_hex": "",
+      "decoded_hex": "0640d0000081d7",
+      "wire_hex": "040640d0010381d700"
+    },
+    {
+      "name": "reset_ack",
+      "tx_id": 16391,
+      "identifier": 209,
+      "payload_hex": "",
+      "decoded_hex": "0740d10000e04a",
+      "wire_hex": "040740d10103e04a00"
+    },
+    {
+      "name": "error_invalid_parameter",
+      "tx_id": 16392,
+      "identifier": 224,
+      "payload_hex": "0340",
+      "decoded_hex": "0840e00200034080c3",
+      "wire_hex": "050840e00205034080c300"
+    },
+    {
+      "name": "namespaced_vendor_response",
+      "tx_id": 16393,
+      "identifier": 255,
+      "payload_hex": "0f636f2e646a69702e6f70616c696e783412beef",
+      "decoded_hex": "0940ff14000f636f2e646a69702e6f70616c696e783412beefeafd",
+      "wire_hex": "050940ff14170f636f2e646a69702e6f70616c696e783412beefeafd00"
     },
     {
       "name": "set_pixels_crosses_cobs_254_byte_block",
@@ -72,7 +168,8 @@
     { "name": "empty_decoded_frame", "decoded_hex": "", "acceptable_errors": ["frame_too_short"] },
     { "name": "three_byte_decoded_frame", "decoded_hex": "010203", "acceptable_errors": ["frame_too_short"] },
     { "name": "bad_crc_and_length_mismatch", "decoded_hex": "34128301000000", "acceptable_errors": ["crc_mismatch", "payload_length_mismatch"] },
-    { "name": "crc_valid_payload_length_mismatch", "decoded_hex": "34128301001033", "acceptable_errors": ["payload_length_mismatch"] }
+    { "name": "crc_valid_payload_length_mismatch", "decoded_hex": "34128301001033", "acceptable_errors": ["payload_length_mismatch"] },
+    { "name": "declared_max_payload_but_empty", "decoded_hex": "010040ffffffbb", "acceptable_errors": ["payload_length_mismatch"] }
   ],
   "streams": [
     {
@@ -97,6 +194,201 @@
       "outcomes": [
         { "error": "encoded_frame_too_long" },
         { "frame": "get_info_tx_zero" }
+      ]
+    },
+    {
+      "name": "malformed_cobs_is_reported_then_recovers",
+      "max_encoded_frame_length": 65801,
+      "chunks_hex": ["050102000101020101033c2600"],
+      "outcomes": [
+        { "error": "cobs_decode_error" },
+        { "frame": "get_info_tx_zero" }
+      ]
+    }
+  ],
+  "host_cases": [
+    {
+      "name": "unknown_info_record_is_accepted",
+      "frame": "info_with_unknown_extension",
+      "outcome": { "accept": true }
+    },
+    {
+      "name": "truncated_info_record_is_rejected",
+      "frame": "info_with_truncated_record_header",
+      "outcome": { "reject": "malformed_info_records" }
+    },
+    {
+      "name": "config_entry_count_is_session_bound",
+      "frame": "config_query_response",
+      "context": { "expected_channel_count": 2 },
+      "outcome": { "reject": "config_entry_count_mismatch" }
+    }
+  ],
+  "device_cases": [
+    {
+      "name": "broadcast_configure_success",
+      "initial_state": {
+        "channel_capacities": [60, 60],
+        "channels": [
+          { "color_order": 0, "protocol": 0, "led_count": 1, "pixels_hex": "ffffff" },
+          { "color_order": 0, "protocol": 0, "led_count": 1, "pixels_hex": "ffffff" }
+        ]
+      },
+      "steps": [
+        {
+          "input": { "tx_id": 4097, "identifier": 32, "payload_hex": "ff02000200" },
+          "expect": {
+            "responses": [
+              { "tx_id": 4097, "identifier": 160, "payload_hex": "0200020002000200" }
+            ]
+          }
+        },
+        {
+          "input": { "tx_id": 4098, "identifier": 80, "payload_hex": "ff" },
+          "expect": { "responses": [] }
+        },
+        {
+          "input": { "event": "active_show_completed" },
+          "expect": {
+            "responses": [
+              { "tx_id": 4098, "identifier": 208, "payload_hex": "" }
+            ],
+            "displayed_channels_hex": ["000000000000", "000000000000"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "configure_capacity_rejection",
+      "initial_state": {
+        "channel_capacities": [60],
+        "channels": [
+          { "color_order": 2, "protocol": 0, "led_count": 2, "pixels_hex": "000000000000" }
+        ]
+      },
+      "steps": [
+        {
+          "input": { "tx_id": 8193, "identifier": 32, "payload_hex": "ff02003d00" },
+          "expect": {
+            "responses": [
+              { "tx_id": 8193, "identifier": 224, "payload_hex": "0320" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "request_rejection_boundaries",
+      "initial_state": {
+        "channel_capacities": [2],
+        "channels": [
+          { "color_order": 0, "protocol": 0, "led_count": 2, "pixels_hex": "000000000000" }
+        ]
+      },
+      "steps": [
+        {
+          "input": { "tx_id": 8449, "identifier": 3, "payload_hex": "" },
+          "expect": { "responses": [{ "tx_id": 8449, "identifier": 224, "payload_hex": "0103" }] }
+        },
+        {
+          "input": { "tx_id": 8450, "identifier": 32, "payload_hex": "" },
+          "expect": { "responses": [{ "tx_id": 8450, "identifier": 224, "payload_hex": "0220" }] }
+        },
+        {
+          "input": { "tx_id": 8451, "identifier": 127, "payload_hex": "0f" },
+          "expect": { "responses": [{ "tx_id": 8451, "identifier": 224, "payload_hex": "027f" }] }
+        },
+        {
+          "input": { "tx_id": 8452, "identifier": 127, "payload_hex": "012e0000" },
+          "expect": { "responses": [{ "tx_id": 8452, "identifier": 224, "payload_hex": "037f" }] }
+        }
+      ]
+    },
+    {
+      "name": "rgbw_pixel_output",
+      "initial_state": {
+        "channel_capacities": [1],
+        "channels": [
+          { "color_order": 6, "protocol": 0, "led_count": 1, "pixels_hex": "00000000" }
+        ]
+      },
+      "steps": [
+        {
+          "input": { "tx_id": 8705, "identifier": 64, "payload_hex": "000000010001020304" },
+          "expect": { "responses": [{ "tx_id": 8705, "identifier": 192, "payload_hex": "" }] }
+        },
+        {
+          "input": { "tx_id": 8706, "identifier": 80, "payload_hex": "ff" },
+          "expect": { "responses": [] }
+        },
+        {
+          "input": { "event": "active_show_completed" },
+          "expect": {
+            "responses": [{ "tx_id": 8706, "identifier": 208, "payload_hex": "" }],
+            "displayed_channels_hex": ["01020304"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "one_pending_show_pipeline",
+      "initial_state": {
+        "channel_capacities": [2],
+        "channels": [
+          { "color_order": 0, "protocol": 0, "led_count": 2, "pixels_hex": "000000000000" }
+        ]
+      },
+      "steps": [
+        {
+          "input": { "tx_id": 0, "identifier": 65, "payload_hex": "ff010203" },
+          "expect": { "responses": [] }
+        },
+        {
+          "input": { "tx_id": 12289, "identifier": 80, "payload_hex": "ff" },
+          "expect": { "responses": [] }
+        },
+        {
+          "input": { "tx_id": 0, "identifier": 65, "payload_hex": "ff040506" },
+          "expect": { "responses": [] }
+        },
+        {
+          "input": { "tx_id": 12290, "identifier": 80, "payload_hex": "ff" },
+          "expect": { "responses": [] }
+        },
+        {
+          "input": { "tx_id": 12291, "identifier": 65, "payload_hex": "ff070809" },
+          "expect": {
+            "responses": [
+              { "tx_id": 12291, "identifier": 224, "payload_hex": "0441" }
+            ]
+          }
+        },
+        {
+          "input": { "tx_id": 12292, "identifier": 80, "payload_hex": "ff" },
+          "expect": {
+            "responses": [
+              { "tx_id": 12292, "identifier": 224, "payload_hex": "0450" }
+            ]
+          }
+        },
+        {
+          "input": { "event": "active_show_completed" },
+          "expect": {
+            "responses": [
+              { "tx_id": 12289, "identifier": 208, "payload_hex": "" }
+            ],
+            "displayed_channels_hex": ["010203010203"]
+          }
+        },
+        {
+          "input": { "event": "active_show_completed" },
+          "expect": {
+            "responses": [
+              { "tx_id": 12290, "identifier": 208, "payload_hex": "" }
+            ],
+            "displayed_channels_hex": ["040506040506"]
+          }
+        }
       ]
     }
   ]

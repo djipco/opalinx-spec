@@ -27,10 +27,13 @@ Both 3-component (RGB) and 4-component (RGBW) chips are supported.
 
 ## Versioning and wire compatibility
 
-Specification releases follow [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html). The 
-three protocol-version bytes at the start of `INFO` carry only the SemVer core `major.minor.patch`; 
-they do not encode prerelease or build metadata. These bytes identify the wire contract, not the 
+Specification releases follow [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html). The
+three protocol-version bytes at the start of `INFO` carry only the SemVer core `major.minor.patch`;
+they do not encode prerelease or build metadata. These bytes identify the wire contract, not the
 firmware or library release.
+
+Prerelease versions provide no compatibility guarantees. Prerelease implementations are expected to
+be developed and updated together. The current specification reports `1.0.0` on the wire.
 
 A host MUST inspect the three-byte version preamble before parsing the version-specific remainder of
 `INFO`. An `INFO` payload shorter than three bytes is malformed. If the major version is unsupported,
@@ -324,10 +327,14 @@ response; a host MUST NOT send a color-order value it does not understand.
 | `0x01` | WS2811 at 400 kHz  |
 | `0x02` | WS2813 at 800 kHz  |
 
+The protocol value selects the signaling profile used by the device. Color order independently
+determines whether 24 or 32 component bits are transmitted per LED. Electrical timing conformance is
+determined by compatibility with the named LED family and is outside the Opalinx wire protocol.
+
 Every conformant device MUST support `0x00`. Support for other assigned values is advertised by the
-`Supported signaling protocols` INFO record. A host MUST NOT request a protocol value it does not
-understand, and SHOULD NOT request a value absent from that record. If the record is absent, only
-`0x00` is guaranteed; a host MAY probe another value and handle rejection.
+`Supported signaling protocols` INFO record. A host MUST only request a protocol value that it
+understands and that the device advertises as supported. If the record is absent, the supported set
+is `{0x00}`.
 
 CONFIG readers MUST preserve and expose unknown numeric protocol values rather than rejecting the
 response. A device rejects an unassigned value with `ERR_INVALID_PARAMETER` and an assigned but
@@ -492,7 +499,10 @@ validation. Rejection does not change pipeline or pixel state.
 | `Configure Device`, `Reset` | Accept | `ERR_BUSY` | `ERR_BUSY` |
 | Query requests | Accept | Accept | Accept |
 
-Vendor requests define their own admission rules.
+A vendor request MUST NOT violate core Opalinx state or pipelining guarantees. If it accesses state
+governed by this table, its vendor contract MUST identify the equivalent core operation and the
+request MUST follow that operation's admission rule. Other vendor requests define their own
+admission rules.
 
 An active Show completes after physical transmission, including the reset/latch interval required by
 the selected signaling protocol. When it completes:
@@ -672,8 +682,8 @@ Request. Type `0xFF` MAY repeat because each `(namespace, vendor record ID)` pai
 identified; a sender MUST NOT repeat the same pair. Types `0x07`–`0xFE` MUST NOT be used as private
 extension points.
 
-INFO does not advertise configuration limits. A device validates every `Configure Device` request
-and reports `ERR_INVALID_PARAMETER` when a requested configuration is unsupported.
+INFO does not advertise LED-count capacity. A device reports `ERR_INVALID_PARAMETER` when a
+`Configure Device` request specifies an LED count of zero or one that exceeds its capacity.
 
 ### CONFIG (`0x82`, `0xA0`)
 
@@ -782,14 +792,11 @@ output can never cause an error-response loop.
 | `0x00`        | `ERR_UNSPECIFIED`            | Generic error                                     |
 | `0x01`        | `ERR_UNKNOWN_IDENTIFIER`     | Identifier byte not recognized                    |
 | `0x02`        | `ERR_INVALID_PAYLOAD_LENGTH` | Payload length ≠ message's expected size          |
-| `0x03`        | Reserved                     | Reserved for future specification versions        |
-| `0x04`        | `ERR_INVALID_PARAMETER`      | A parameter value is out of range                 |
-| `0x05`        | `ERR_BUSY`                   | Device cannot accept the message at this time     |
-| `0x06`        | `ERR_UNSUPPORTED`            | Message valid but unsupported by this device      |
-| `0x07`        | Reserved                     | Reserved for future specification versions        |
-| `0x08`        | `ERR_DEVICE_FAULT`           | Device failed to complete an otherwise-valid operation |
-| `0x09`–`0x7F` | Reserved                     | Reserved for future specification versions        |
-| `0x80`–`0xFF` | Reserved                     | Reserved for future specification versions        |
+| `0x03`        | `ERR_INVALID_PARAMETER`      | A parameter value is out of range                 |
+| `0x04`        | `ERR_BUSY`                   | Device cannot accept the message at this time     |
+| `0x05`        | `ERR_UNSUPPORTED`            | Message valid but unsupported by this device      |
+| `0x06`        | `ERR_DEVICE_FAULT`           | Device failed to complete an otherwise-valid operation |
+| `0x07`–`0xFF` | Reserved                     | Reserved for future specification versions        |
 
 Devices SHOULD emit the most specific applicable error code. `ERR_UNSPECIFIED` is reserved for
 conditions not covered by any other code and SHOULD NOT be used when a more specific code applies.
@@ -813,8 +820,8 @@ correlate device replies with host requests.
 
 ## Conformance
 
-The canonical Opalinx wire examples are published in the
-[wire conformance corpus](conformance/README.md).
+Canonical Opalinx wire examples and observable device-behavior cases are published in the
+[conformance corpus](conformance/README.md).
 
 For conformance, **recognize** means parsing the standard identifier, applying the specified
 validation order, and returning a specific result or error rather than `ERR_UNKNOWN_IDENTIFIER`.

@@ -3,16 +3,18 @@
   "$id": "https://opalinx.dev/schema/conformance-v1.json",
   "title": "Opalinx wire conformance corpus",
   "type": "object",
-  "required": ["corpus_version", "protocol_version", "valid_frames", "invalid_decoded_frames", "streams"],
+  "required": ["corpus_version", "protocol_version", "valid_frames", "invalid_decoded_frames", "streams", "host_cases", "device_cases"],
   "properties": {
-    "corpus_version": { "type": "integer", "const": 5 },
+    "corpus_version": { "type": "integer", "enum": [6] },
     "protocol_version": {
       "type": "string",
       "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\\.[0-9A-Za-z-]+)*)?(\\+[0-9A-Za-z-]+(\\.[0-9A-Za-z-]+)*)?$"
     },
     "valid_frames": { "type": "array", "items": { "$ref": "#/$defs/validFrame" } },
     "invalid_decoded_frames": { "type": "array", "items": { "$ref": "#/$defs/invalidFrame" } },
-    "streams": { "type": "array", "items": { "$ref": "#/$defs/stream" } }
+    "streams": { "type": "array", "items": { "$ref": "#/$defs/stream" } },
+    "host_cases": { "type": "array", "items": { "$ref": "#/$defs/hostCase" } },
+    "device_cases": { "type": "array", "items": { "$ref": "#/$defs/deviceCase" } }
   },
   "patternProperties": {
     "^\\$schema$": { "type": "string" }
@@ -62,9 +64,134 @@
             "type": "object",
             "oneOf": [
               { "required": ["frame"], "properties": { "frame": { "$ref": "#/$defs/name" } }, "additionalProperties": false },
-              { "required": ["error"], "properties": { "error": { "const": "encoded_frame_too_long" } }, "additionalProperties": false }
+              { "required": ["error"], "properties": { "error": { "enum": ["encoded_frame_too_long", "cobs_decode_error"] } }, "additionalProperties": false }
             ]
           }
+        }
+      },
+      "additionalProperties": false
+    },
+    "message": {
+      "type": "object",
+      "required": ["tx_id", "identifier", "payload_hex"],
+      "properties": {
+        "tx_id": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "identifier": { "type": "integer", "minimum": 0, "maximum": 255 },
+        "payload_hex": { "$ref": "#/$defs/hex" }
+      },
+      "additionalProperties": false
+    },
+    "hostCase": {
+      "type": "object",
+      "required": ["name", "frame", "outcome"],
+      "properties": {
+        "name": { "$ref": "#/$defs/name" },
+        "frame": { "$ref": "#/$defs/name" },
+        "context": {
+          "type": "object",
+          "properties": {
+            "expected_channel_count": { "type": "integer", "minimum": 1, "maximum": 255 }
+          },
+          "required": ["expected_channel_count"],
+          "additionalProperties": false
+        },
+        "outcome": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": ["accept"],
+              "properties": { "accept": { "enum": [true] } },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "required": ["reject"],
+              "properties": {
+                "reject": { "enum": ["malformed_info_records", "config_entry_count_mismatch"] }
+              },
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "channelConfiguration": {
+      "type": "object",
+      "required": ["color_order", "protocol", "led_count", "pixels_hex"],
+      "properties": {
+        "color_order": { "type": "integer", "minimum": 0, "maximum": 255 },
+        "protocol": { "type": "integer", "minimum": 0, "maximum": 255 },
+        "led_count": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "pixels_hex": { "$ref": "#/$defs/hex" }
+      },
+      "additionalProperties": false
+    },
+    "deviceInitialState": {
+      "type": "object",
+      "required": ["channel_capacities", "channels"],
+      "properties": {
+        "channel_capacities": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 1, "maximum": 65535 },
+          "minItems": 1,
+          "maxItems": 255
+        },
+        "channels": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/channelConfiguration" },
+          "minItems": 1,
+          "maxItems": 255
+        }
+      },
+      "additionalProperties": false
+    },
+    "deviceExpectation": {
+      "type": "object",
+      "properties": {
+        "responses": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/message" }
+        },
+        "displayed_channels_hex": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/hex" },
+          "minItems": 1,
+          "maxItems": 255
+        }
+      },
+      "minProperties": 1,
+      "additionalProperties": false
+    },
+    "deviceStep": {
+      "type": "object",
+      "required": ["input", "expect"],
+      "properties": {
+        "input": {
+          "oneOf": [
+            { "$ref": "#/$defs/message" },
+            {
+              "type": "object",
+              "required": ["event"],
+              "properties": { "event": { "enum": ["active_show_completed"] } },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "expect": { "$ref": "#/$defs/deviceExpectation" }
+      },
+      "additionalProperties": false
+    },
+    "deviceCase": {
+      "type": "object",
+      "required": ["name", "initial_state", "steps"],
+      "properties": {
+        "name": { "$ref": "#/$defs/name" },
+        "initial_state": { "$ref": "#/$defs/deviceInitialState" },
+        "steps": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/deviceStep" },
+          "minItems": 1
         }
       },
       "additionalProperties": false
