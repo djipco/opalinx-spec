@@ -106,12 +106,20 @@ Clients MUST derive their chunk size from that field and MUST NOT send a request
 the advertised value. The rejection and recovery rules for requests exceeding this limit are defined
 in [Receiver Framing and Recovery](#receiver-framing-and-recovery).
 
-The applicable encoded-frame limit MUST accommodate the seven decoded framing bytes, the largest
-payload the endpoint is required to accept, and worst-case COBS overhead.
+For an endpoint required to accept payloads of at most `P` bytes, the maximum decoded frame length is
+`D = P + 7`. The applicable encoded-frame limit, excluding the terminating delimiter, is:
+
+`E = D + floor(D / 254) + 1`
+
+This is the maximum COBS-encoded length of a `D`-byte frame. The complete transmitted frame may
+therefore occupy `E + 1` bytes including its `0x00` delimiter. A device uses its advertised
+`max_payload_length` as `P`; a host uses `65535`. At the protocol maximum, `D = 65542`, `E = 65801`,
+and the complete delimited frame is at most `65802` bytes.
 
 ### Receiver Framing and Recovery
 
-Each endpoint MUST limit the bytes retained between delimiters to its applicable encoded-frame limit.
+Each endpoint MUST limit the bytes retained between delimiters to its applicable encoded-frame limit
+`E`. The terminating delimiter is not part of that limit.
 
 An empty run between delimiters is ignored. If a run exceeds the applicable encoded-frame limit, the
 receiver MUST discard it through its terminating delimiter without decoding, responding, or changing
