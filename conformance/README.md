@@ -1,6 +1,6 @@
 # Opalinx wire conformance corpus
 
-`vectors.json` is the canonical, machine-readable set of Opalinx 1.x wire
+The `vectors.json` file is the canonical, machine-readable set of Opalinx 1.x wire
 examples. Implementations consume this file in their automated tests; examples
 must not be copied into implementation repositories.
 
