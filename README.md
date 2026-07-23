@@ -15,9 +15,6 @@ over a reliable byte stream (typically, serial over USB).
 **WS2812**, **WS2812B**, **WS2813**, and their variants (e.g., **WS2814**, **WS2815**, **SK6812**).
 Both 3-component (RGB) and 4-component (RGBW) chips are supported.
 
-> [!NOTE]
-> Two-wire protocols such as **APA102** (DotStar) and **WS2801** are not currently in scope for
-> this specification.
 
 ## Conventions
 
