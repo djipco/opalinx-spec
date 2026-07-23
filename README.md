@@ -28,10 +28,6 @@ Both 3-component (RGB) and 4-component (RGBW) chips are supported.
 
 - **Strings**: UTF-8 encoded with a length prefix, not null-terminated.
 
-- **Reserved and unassigned values**: Senders and receivers MUST follow the rules stated by the field
-  or message definition. A value being reserved or unassigned does not, by itself, imply that it
-  should be ignored.
-
 ## Versioning and wire compatibility
 
 Specification releases follow [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
