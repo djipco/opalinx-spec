@@ -402,12 +402,27 @@ issuing the next `Show` are guaranteed never to receive `ERR_BUSY`. For high-thr
 
 ### Frame Pipelining
 
-Frame transmission on **WS281x** LEDs takes a fixed, comparatively long time — roughly
-`LED_count × 1.25 µs` per channel plus a minimum 300 µs inter-frame reset. A host that waits for
-`SHOW_ACK` before issuing the next `Show` (the lock-step pattern above) leaves the device idle for
-one host round-trip at every frame boundary, because the device cannot begin the next frame until a
-new `Show` arrives. Frame pipelining removes that idle gap by letting the host queue the next `Show`
-while the current frame is still transmitting.
+Frame transmission on **WS281x** LEDs takes a fixed, comparatively long time. The duration for one
+channel is:
+
+```text
+bits_per_led       = components_per_led × 8
+data_time          = LED_count × bits_per_led × bit_period
+frame_time         = data_time + reset_time
+minimum_reset_time = 300 µs
+```
+
+The protocol values defined by OPAL use a `1.25 µs` bit period at 800 kHz and a `2.5 µs` bit period
+at 400 kHz. Therefore, excluding the reset interval, one RGB LED takes approximately `30 µs` at
+800 kHz or `60 µs` at 400 kHz; one RGBW LED takes approximately `40 µs` at 800 kHz or `80 µs` at
+400 kHz. For a broadcast `Show`, all channels start together and the physical operation completes
+when the slowest affected channel completes, so its duration is the maximum `frame_time` across the
+affected channels, not the sum of their durations.
+
+A host that waits for `SHOW_ACK` before issuing the next `Show` (the lock-step pattern above) leaves
+the device idle for one host round-trip at every frame boundary, because the device cannot begin the
+next frame until a new `Show` arrives. Frame pipelining removes that idle gap by letting the host
+queue the next `Show` while the current frame is still transmitting.
 
 **Frame pipelining is a mandatory part of OPAL.** Every conformant device supports a one-deep `Show`
 queue, so a host can always pipeline without negotiating a capability first — pipelining is never
@@ -753,9 +768,19 @@ host application.
 produce one (`Request Device Information`, `Request Device Configuration`, `Configure Device`,
 and `Ping`). A suggested timeout is 1 second over USB serial; timeouts may be adjusted per
 transport (e.g., longer for high-latency links like Bluetooth LE). When waiting for `SHOW_ACK` or
-`RESET_ACK`, hosts MUST use the LED transmission time as the timeout basis rather than a fixed
-duration; at 800 kHz, transmission takes approximately `LED_count × 1.25 µs` per channel plus a
-minimum 300 µs inter-frame reset, plus transport latency.
+`RESET_ACK`, hosts MUST use the component count, configured signaling protocol, LED count, and reset
+interval to calculate the physical frame duration as defined in [Frame Pipelining](#frame-pipelining),
+rather than relying on a fixed timeout. A `Show` accepted while another frame is active may wait for
+the remainder of that active frame and then transmit its own frame before its `SHOW_ACK` is emitted;
+a conservative timeout therefore allows up to two affected-frame durations when both frames have the
+same configuration. With heterogeneous configurations, use the maximum possible remaining duration
+of the active frame plus the duration of the acknowledged frame. A `RESET_ACK` needs one zero-frame
+duration because `Reset` is rejected while output is already active; that frame uses the device's
+power-on default configuration. A host that cached the initial `CONFIG` response can calculate this
+duration directly. Otherwise it SHOULD use the advertised LED limits to derive a conservative bound,
+or fall back to a documented implementation-specific management timeout when those limits are `0`
+(not advertised). Hosts MUST add transport, scheduling, and implementation margin to these physical
+minima.
 
 Future versions may define additional transport bindings for other reliable or packet-based
 transports.
