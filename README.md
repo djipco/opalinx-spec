@@ -230,7 +230,7 @@ The format used is **CRC-16/CCITT-FALSE** with the following parameters:
 > MUST yield `0x29B1`.
 
 Receivers MUST validate the CRC on every complete COBS-decoded candidate of at least seven bytes and
-MUST reject a candidate with an invalid CRC using `ERR_CRC_MISMATCH`. Candidates that cannot be
+MUST silently discard a candidate with an invalid CRC. Candidates that cannot be
 decoded, are shorter than seven bytes, or were discarded as oversized follow the recovery rules in
 [Receiver Framing and Recovery](#receiver-framing-and-recovery), because their CRC cannot be
 reliably located or validated.
@@ -1125,8 +1125,7 @@ transport MUST use a vendor-namespaced `transport` identifier such as
 for presenting reliable ordered frame delivery to the Opalinx layer.
 
 **Timeouts**: Hosts MUST implement a timeout when waiting for a response to nonzero-transaction-ID
-messages that produce one
-produce one (`Request Device Information`, `Request Device Configuration`, `Configure Device`,
+messages that produce one (`Request Device Information`, `Request Device Configuration`, `Configure Device`,
 and `Ping`). A suggested timeout is 1 second over USB serial; timeouts may be adjusted for a
 higher-latency conforming binding. When waiting for `SHOW_ACK` or
 `RESET_ACK`, hosts MUST use the component count, configured signaling protocol, LED count, and reset
@@ -1149,9 +1148,36 @@ format, provided each binding supplies the delivery contract above.
 
 ## Conformance
 
+For conformance, **recognize** means parsing the standard identifier, applying the specified
+validation order, and returning a specific result or error rather than `ERR_UNKNOWN_IDENTIFIER`.
+**Support** means successfully executing every otherwise-valid instance within the limits the device
+advertises. Recognizing a capability-gated operation and returning `ERR_UNSUPPORTED` when that
+capability is not advertised is conformant; advertising a capability and then rejecting an
+otherwise-valid use of it is not.
+
+Every conformant device MUST recognize all standard 1.0 request identifiers. The required successful
+baseline is:
+
+| Request or mode | Conformance requirement |
+|-----------------|-------------------------|
+| Device information, configuration query, and Ping | Mandatory |
+| Broadcast Configure using any assigned 3-component order and protocol `0x00` | Mandatory |
+| Set Pixels and Fill Channel for valid configured channels | Mandatory |
+| Broadcast Show | Mandatory |
+| Reset | Mandatory |
+| Namespaced vendor request | Envelope validation mandatory; individual namespaces optional |
+| RGBW configuration and data | Mandatory only with `CAP_RGBW` |
+| Per-channel Configure | Mandatory only with `CAP_PER_CHANNEL_CONFIG` |
+| Per-channel Show | Mandatory only with `CAP_PER_CHANNEL_SHOW` |
+| Additional signaling protocols | Mandatory only for values advertised in INFO record `0x06` |
+
+An optional capability or advertised protocol value is a behavioral promise, not merely descriptive
+metadata. Devices MUST NOT advertise features they implement only for a subset of otherwise-valid
+inputs unless that limitation is itself defined and advertised by the feature's specification.
+
 An implementation is considered **Opalinx** 1.0 conformant if it:
 
-- Accepts all request messages defined in this specification with the framing described.
+- Recognizes all standard request messages and supports the mandatory baseline above.
 - Implements the bounded accumulation, oversized-frame discard, delimiter recovery, and exact
   validation order defined in [Receiver Framing and Recovery](#receiver-framing-and-recovery).
 - Implements the session-boundary cleanup and persistent device state defined in
