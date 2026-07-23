@@ -53,16 +53,64 @@ following unencoded structure:
 **OPAL** frames are encoded with 
 [Consistent Overhead Byte Stuffing (COBS)](https://en.wikipedia.org/wiki/Consistent_Overhead_Byte_Stuffing) 
 and terminated with a single `0x00` delimiter byte. The encoded frame is guaranteed not to contain 
-`0x00`. Receivers resynchronize by reading until the `0x00` delimiter, then COBS-decoding the 
-accumulated bytes and validating the CRC. If the accumulation buffer is empty when a delimiter is 
-received (a lone delimiter), it MUST be silently discarded. If the buffer is non-empty and COBS 
-decoding fails, the device MUST emit `ERR_FRAMING_ERROR` with transaction ID `0x0000` and offending 
-identifier `0x00`. In all cases the accumulation buffer is reset and subsequent frames are processed 
-normally.
+`0x00`. Receivers resynchronize at each delimiter and MUST bound the memory used to accumulate an
+encoded frame.
 
-Receivers MUST apply validation in the following order: COBS decode, CRC, identifier range,
-payload length, then parameter values. This ensures that `ERR_CRC_MISMATCH` is always emitted
-for corrupted frames regardless of what the corrupted identifier byte happens to contain.
+### Receiver Framing and Recovery
+
+A receiver has two byte-stream states:
+
+- **Accumulating**: nonzero bytes are appended to the current encoded-frame buffer.
+- **Discarding oversized frame**: bytes are discarded until the next `0x00` delimiter. No prefix of
+  the oversized frame may be decoded or dispatched.
+
+The receiver's maximum encoded-frame length MUST be large enough for a frame carrying its advertised
+`max_payload_length`, including the seven decoded framing bytes and worst-case COBS overhead. If the
+accumulation exceeds that limit before a delimiter arrives, the receiver MUST enter the discarding
+state immediately and release or reuse the accumulated storage. This bounds memory even if a peer
+never sends a delimiter.
+
+On receipt of a delimiter, the receiver MUST behave as follows:
+
+1. If it is discarding an oversized frame, it returns to the accumulating state. A device MUST emit
+   exactly one `ERR_INVALID_PAYLOAD_LENGTH` for that discarded frame, using transaction ID `0x0000`
+   and offending identifier `0x00`, because no field in an incomplete prefix is trustworthy.
+2. If it is accumulating zero bytes, the delimiter is a lone delimiter and MUST be silently ignored.
+3. Otherwise, the accumulated bytes form one candidate frame. The receiver clears its accumulation
+   before processing the candidate so the next frame can be received independently.
+
+A COBS-decoded frame has a minimum size of seven bytes: transaction ID (2), identifier (1), payload
+length (2), and CRC (2). A device MUST emit `ERR_FRAMING_ERROR` with transaction ID `0x0000` and
+offending identifier `0x00` if COBS decoding fails or produces fewer than seven bytes.
+
+For a decoded frame of at least seven bytes, a device receiver MUST validate and reject in this exact
+order:
+
+1. **CRC**: The received checksum is always the final two decoded bytes. It MUST NOT be located using
+   the untrusted payload-length field. Calculate the CRC over every preceding decoded byte. On
+   mismatch, emit `ERR_CRC_MISMATCH` using the transaction ID and identifier recovered from byte
+   positions 0–2, even if those recovered values were themselves corrupted.
+2. **Identifier and direction**: A device accepts request identifiers `0x01`–`0x7F`. It MUST reject
+   `0x00` and response-space identifiers `0x80`–`0xFF` with `ERR_UNKNOWN_IDENTIFIER`, echoing the
+   recovered transaction ID and offending identifier.
+3. **Declared payload length**: The decoded size MUST equal `7 + payload_length`. A mismatch MUST
+   produce `ERR_INVALID_PAYLOAD_LENGTH`, echoing the recovered transaction ID and identifier.
+4. **Receiver capacity**: A structurally valid payload exceeding the receiver's advertised
+   `max_payload_length` MUST produce `ERR_INVALID_PAYLOAD_LENGTH`. In the usual bounded-buffer
+   implementation this case is already handled by the oversized-frame discard rule above.
+5. **Message-specific payload length**: A payload whose size differs from the exact size required by
+   its recognized message identifier MUST produce `ERR_INVALID_PAYLOAD_LENGTH`.
+6. **Parameter values and operational state**: Only after all preceding checks pass may the receiver
+   validate field values or dispatch the request.
+
+The oversized-frame rule is the only exception to CRC-first validation: the complete frame and its
+checksum were never retained, so CRC validation is impossible. An oversized frame causes exactly one
+uncorrelated error at its terminating delimiter and MUST NOT affect previously accepted protocol or
+pixel state.
+
+A host receiving malformed device output MUST apply the same framing boundaries and validation order,
+discard the malformed candidate, and continue at the next delimiter. It reports the failure locally;
+it MUST NOT send an `ERROR` response to a malformed response, which avoids error-response loops.
 
 **Fields**:
 
@@ -114,8 +162,11 @@ The format used is **CRC-16/CCITT-FALSE** with the following parameters:
 > Implementations can verify their CRC by computing it over the ASCII string `"123456789"`, which 
 > MUST yield `0x29B1`.
 
-Receivers MUST validate the CRC on every incoming message and MUST reject any message with an
-invalid CRC with `ERR_CRC_MISMATCH`.
+Receivers MUST validate the CRC on every complete COBS-decoded candidate of at least seven bytes and
+MUST reject a candidate with an invalid CRC using `ERR_CRC_MISMATCH`. Candidates that cannot be
+decoded, are shorter than seven bytes, or were discarded as oversized follow the recovery rules in
+[Receiver Framing and Recovery](#receiver-framing-and-recovery), because their CRC cannot be
+reliably located or validated.
 
 
 ## Message Ranges
@@ -686,7 +737,7 @@ an `ERROR` response.
 | `0x04`        | `ERR_INVALID_PARAMETER`      | A parameter value is out of range                 |
 | `0x05`        | `ERR_BUSY`                   | Device cannot accept the message at this time     |
 | `0x06`        | `ERR_UNSUPPORTED`            | Message valid but unsupported by this device      |
-| `0x07`        | `ERR_FRAMING_ERROR`          | COBS decoding failed; frame is malformed          |
+| `0x07`        | `ERR_FRAMING_ERROR`          | COBS decoding failed or decoded frame is shorter than 7 bytes |
 | `0x08`–`0x7F` | Reserved                     | Reserved for future specification versions        |
 | `0x80`–`0xFF` | Vendor-specific              | Available for vendor-specific error codes         |
 
@@ -791,8 +842,8 @@ transports.
 An implementation is considered **OPAL** 1.0 conformant if it:
 
 - Accepts all request messages defined in this specification with the framing described.
-- Validates the COBS frame, `0x00` delimiter, identifier range, payload length, and CRC-16 on every 
-  received message, and rejects any message with an invalid CRC with `ERR_CRC_MISMATCH`.
+- Implements the bounded accumulation, oversized-frame discard, delimiter recovery, and exact
+  validation order defined in [Receiver Framing and Recovery](#receiver-framing-and-recovery).
 - Rejects malformed messages by emitting an appropriate `ERROR` response without affecting the
   state of prior valid messages.
 - Responds to `Request Device Information` with a properly formatted `INFO` response containing
