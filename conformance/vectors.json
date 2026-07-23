@@ -63,9 +63,9 @@
       "name": "namespaced_vendor_request",
       "tx_id": 13124,
       "identifier": 127,
-      "payload_hex": "10636f6d2e646a69702e6f70616c696e783412dead",
-      "decoded_hex": "44337f150010636f6d2e646a69702e6f70616c696e783412deaddb2f",
-      "wire_hex": "0544337f151810636f6d2e646a69702e6f70616c696e783412deaddb2f00"
+      "payload_hex": "0f636f2e646a69702e6f70616c696e783412dead",
+      "decoded_hex": "44337f14000f636f2e646a69702e6f70616c696e783412deadfda4",
+      "wire_hex": "0544337f14170f636f2e646a69702e6f70616c696e783412deadfda400"
     },
     {
       "name": "set_pixels_crosses_cobs_254_byte_block",
