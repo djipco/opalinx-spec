@@ -84,12 +84,6 @@ The format used is **CRC-16/CCITT-FALSE** with the following parameters:
  - Initial value: `0xFFFF`
  - No input reflection, no output reflection, no final XOR.
 
-Receivers MUST validate the CRC on every complete COBS-decoded candidate of at least seven bytes and
-MUST silently discard a candidate with an invalid CRC. Candidates that cannot be
-decoded, are shorter than seven bytes, or were discarded as oversized follow the recovery rules in
-[Receiver Framing and Recovery](#receiver-framing-and-recovery), because their CRC cannot be
-reliably located or validated.
-
 ### Encoding and Delimiting
 
 **Opalinx** frames are encoded with
@@ -108,10 +102,7 @@ Each device advertises the largest request payload it accepts in the `max_payloa
 the `INFO` response. This is a wire limit, not a statement about storage or processing architecture.
 Clients MUST derive their chunk size from that field and MUST NOT send a request payload exceeding
 the advertised value. The rejection and recovery rules for requests exceeding this limit are defined
-in [Receiver Framing and Recovery](#receiver-framing-and-recovery). After COBS encoding, a frame grows
-by at most one byte per 254 bytes of input plus the `0x00` delimiter. The supported encoded-frame
-limit therefore includes the seven framing bytes, the payload, worst-case COBS overhead, and the
-delimiter.
+in [Receiver Framing and Recovery](#receiver-framing-and-recovery).
 
 ### Receiver Framing and Recovery
 
@@ -149,6 +140,56 @@ A host MUST use the same bounded delimiter recovery and validate COBS structure,
 declared length, identifier and direction, and message-specific structure before accepting a response.
 It reports failures locally, discards the candidate, continues at the next delimiter, and MUST NOT
 send an `ERROR` response.
+
+
+## Transport Bindings
+
+### Core stream contract
+
+**Opalinx** 1.0 is defined over one full-duplex, reliable, ordered byte stream connecting one host to
+one device. A conforming core binding MUST:
+
+- deliver accepted bytes once, in order, without insertion or duplication;
+- preserve the complete COBS-encoded frame stream, including `0x00` delimiters;
+- expose connection loss as a transport failure rather than silently reconnecting a new peer into an
+  existing Opalinx session;
+- ensure that bytes received before a connection boundary cannot form a frame with bytes received
+  after it.
+
+CRC and delimiter recovery detect corruption and restore framing after a fault; they do not make an
+unreliable transport reliable. Loss of a valid fire-and-forget request cannot be recovered by the
+core protocol, and transaction IDs provide correlation rather than retransmission or deduplication.
+
+### Connection and session boundaries
+
+One established transport connection is one Opalinx session. Transaction IDs and responses are
+scoped to that session and have no meaning after its connection ends. An incomplete frame at a
+connection boundary is discarded. A device MUST NOT deliver a response from an ended session to a
+later session.
+
+A connection boundary is not a device reset. Device configuration, staging pixel buffers, currently
+displayed LED values, and diagnostic counters persist. If physical LED transmission has already
+started, it MUST be allowed to finish, but its old-session acknowledgement is discarded. A pending
+`Show` that has not started MUST be canceled and its acknowledgement discarded. This pending-Show
+cancellation is the sole exception; no other accepted operation is rolled back.
+
+Consequently, a newly connected host MUST NOT assume power-on defaults or known staging contents. It
+MAY send INFO and CONFIG-query requests in either order, but MUST obtain compatible INFO before
+sending configuration, pixel, Show, Reset, or vendor requests. It SHOULD request the current
+configuration and MUST overwrite or reset pixel state before issuing a `Show` unless intentionally
+preserving the previous session's content. A `Reset` remains the explicit operation for restoring
+the LED-control state to device-defined defaults.
+
+Bindings define observable boundaries as follows:
+
+- `usb-cdc`: a session begins when the CDC data interface is opened (DTR asserted) and ends when DTR
+  is deasserted, the USB device disconnects, or the interface is reset;
+- `tcp`: a session is one established TCP connection;
+- `bluetooth-spp`: a session is one established RFCOMM channel;
+- `uart`: UART has no intrinsic open/close event. One session begins when the device initializes the
+  link and continues until device/link reset, unless the binding documents an out-of-band boundary
+  signal. Merely reopening a host serial handle does not create a device-observable new session. A
+  UART overrun is a transport failure even if frame parsing later resynchronizes.
 
 
 ## Message Ranges
@@ -466,9 +507,8 @@ ID is nonzero. Show acknowledgements are emitted in accepted order.
 
 ### Reset (`0x51`)
 
-Resets the device to its power-on state: clears all channel buffers to zero, restores all channel
-configurations to their defaults, and outputs zeros to the physical LEDs. Clients MAY send this
-to establish a known state after connection or after an error condition.
+Restores the LED-control state to its device-defined defaults: resets all channel configurations,
+clears all channel buffers to zero, and outputs zeros to the physical LEDs.
 
 | TRANSACTION ID | IDENTIFIER | PAYLOAD LENGTH | CHECKSUM |
 |----------------|------------|----------------|----------|
@@ -540,36 +580,9 @@ Sent in response to [`Request Device Information`](#request-device-information-0
 The fixed prefix is exactly 7 bytes. Firmware identity and descriptive strings are information records
 so future metadata does not enlarge or reorder the compatibility prefix.
 
-INFO does not advertise configuration limits. A device validates every `Configure Device` request
-and reports `ERR_INVALID_PARAMETER` when a requested configuration is unsupported.
-
-`hardware_revision`, `hardware_platform`, and `transport` records are mandatory, non-empty UTF-8
-strings of at most 63 bytes.
-When a device cannot determine its hardware revision, it MUST report `unknown`. The hardware
-revision is manufacturer-defined; examples include `Rev A`, `1.2`, and `unknown`.
-
-The `hardware_platform` field identifies the processor, module, or computing platform on which
-the controller firmware runs. Examples include `ESP32-P4`, `Teensy 4.1`, and `RP2040`. It is
-informational and does not imply particular capabilities; clients MUST accept and expose unknown
-values. When a device cannot determine its platform, it MUST report `unknown`.
-
-The `transport` field identifies the active transport carrying the current Opalinx connection. It
-does not identify intermediate adapters: a controller receiving Opalinx through a UART reports
-`uart`, even when the host reaches that UART through a USB-to-UART bridge. Standard transport
-identifiers are lowercase ASCII:
-
-| Identifier      | Transport                                      |
-|-----------------|------------------------------------------------|
-| `uart`          | Hardware UART                                  |
-| `usb-cdc`       | USB Communications Device Class serial         |
-| `tcp`           | Transmission Control Protocol                  |
-| `bluetooth-spp` | Bluetooth Serial Port Profile / RFCOMM         |
-
-Future specifications may define additional identifiers. Vendor-defined transports SHOULD use a
-namespaced identifier such as `vendor.example/custom-link`. Clients MUST accept and expose unknown
-transport identifiers and MUST NOT reject a device because its transport is unrecognized. The
-transport string identifies the binding only; it MUST NOT contain link speed, driver, adapter, or
-other diagnostic details.
+**Capability flags**: All eight bits are unassigned in Opalinx 1.0. Devices MUST send zero, and hosts
+MUST ignore bits they do not understand. Capability bits are reserved for simple boolean features;
+structured capability data uses an information record.
 
 #### INFO extensions
 
@@ -620,6 +633,34 @@ standard records in ascending type order for deterministic diagnostics. Adding a
 additive and does not change the offsets or interpretation of the fixed prefix. Changing, removing,
 or reordering a fixed field requires an incompatible protocol revision.
 
+`hardware_revision`, `hardware_platform`, and `transport` records are mandatory, non-empty UTF-8
+strings of at most 63 bytes. When a device cannot determine its hardware revision, it MUST report
+`unknown`. The hardware revision is manufacturer-defined; examples include `Rev A`, `1.2`, and
+`unknown`.
+
+The `hardware_platform` field identifies the processor, module, or computing platform on which the
+controller firmware runs. Examples include `ESP32-P4`, `Teensy 4.1`, and `RP2040`. It is
+informational and does not imply particular capabilities; clients MUST accept and expose unknown
+values. When a device cannot determine its platform, it MUST report `unknown`.
+
+The `transport` field identifies the active transport carrying the current Opalinx connection. It
+does not identify intermediate adapters: a controller receiving Opalinx through a UART reports
+`uart`, even when the host reaches that UART through a USB-to-UART bridge. Standard transport
+identifiers are lowercase ASCII:
+
+| Identifier      | Transport                                      |
+|-----------------|------------------------------------------------|
+| `uart`          | Hardware UART                                  |
+| `usb-cdc`       | USB Communications Device Class serial         |
+| `tcp`           | Transmission Control Protocol                  |
+| `bluetooth-spp` | Bluetooth Serial Port Profile / RFCOMM         |
+
+Future specifications may define additional identifiers. Vendor-defined transports SHOULD use a
+namespaced identifier such as `vendor.example/custom-link`. Clients MUST accept and expose unknown
+transport identifiers and MUST NOT reject a device because its transport is unrecognized. The
+transport string identifies the binding only; it MUST NOT contain link speed, driver, adapter, or
+other diagnostic details.
+
 Every device supports the baseline signaling protocol `0x00`. Absence of record `0x06` means that
 `0x00` is the device's complete supported set. A device that accepts any other signaling-protocol
 value in `Configure Device` MUST include record `0x06`; when present, the record MUST list the
@@ -627,19 +668,14 @@ complete supported set, including `0x00`, in ascending numeric order. Values are
 record MUST be non-empty, and no value may repeat. Unknown values are retained as numbers; their
 presence does not make INFO incompatible.
 
-Capability flags are reserved for future simple boolean facts. A feature with parameters, variants,
-limits, or negotiation rules uses a dedicated information record rather than one capability per
-variant. For example, supported signaling protocols are advertised by record `0x06`.
-
 The `0xFF` vendor-information value contains namespace length (1 byte), namespace, vendor record ID
 (2 bytes little-endian), and vendor data. Namespace syntax and ownership match the Namespaced Vendor
 Request. Type `0xFF` MAY repeat because each `(namespace, vendor record ID)` pair is independently
 identified; a sender MUST NOT repeat the same pair. Types `0x07`–`0xFE` MUST NOT be used as private
 extension points.
 
-**Capability flags**: all eight bits are unassigned in Opalinx 1.0. Devices MUST send zero. Hosts
-MUST ignore bits they do not understand. A future specification may assign bits for simple boolean
-features or define an information record when additional or structured capability data is needed.
+INFO does not advertise configuration limits. A device validates every `Configure Device` request
+and reports `ERR_INVALID_PARAMETER` when a requested configuration is unsupported.
 
 ### CONFIG (`0x82`, `0xA0`)
 
@@ -777,75 +813,6 @@ nonzero correlation key. Implementations MAY count or expose these failures thro
 correlate device replies with host requests.
 
 
-## Example Session
-
-A typical client session driving 300 RGB LEDs per channel on an 8-channel device:
-
-1. Client opens serial connection.
-2. Client sends `Request Device Information` (`0x01`) to verify device presence and capabilities;
-   device responds with `INFO` (`0x81`).
-3. Client sends `Configure Device` (`0x20`) with channel `255`, GRB color order, the WS2811 800 kHz
-   protocol, and 300 LEDs per channel; device responds with `CONFIG` (`0xA0`).
-4. Client sends `Set Pixels` (`0x40`) for channel 0 with 900 bytes (300 × 3) of pixel data.
-5. Client sends `Set Pixels` for channels 1 through 7 in the same manner.
-6. Client sends `Show` (`0x50`) with channel `255` to commit all eight channels simultaneously to
-   the LEDs.
-7. Client repeats steps 4–6 for each new frame.
-
-For installations where all channels display the same content (mirror mode), steps 4–5 collapse
-into a single `Set Pixels` with channel `255`.
-
-
-## Transport Bindings
-
-### Core stream contract
-
-**Opalinx** 1.0 is defined over one full-duplex, reliable, ordered byte stream connecting one host to
-one device. A conforming core binding MUST:
-
-- deliver accepted bytes once, in order, without insertion or duplication;
-- preserve the complete COBS-encoded frame stream, including `0x00` delimiters;
-- expose connection loss as a transport failure rather than silently reconnecting a new peer into an
-  existing Opalinx session;
-- ensure that bytes received before a connection boundary cannot form a frame with bytes received
-  after it.
-
-CRC and delimiter recovery detect corruption and restore framing after a fault; they do not make an
-unreliable transport reliable. Loss of a valid fire-and-forget request cannot be recovered by the
-core protocol, and transaction IDs provide correlation rather than retransmission or deduplication.
-
-### Connection and session boundaries
-
-One established transport connection is one Opalinx session. Transaction IDs and responses are
-scoped to that session and have no meaning after its connection ends. An incomplete frame at a
-connection boundary is discarded. A device MUST NOT deliver a response from an ended session to a
-later session.
-
-A connection boundary is not a device reset. Device configuration, staging pixel buffers, currently
-displayed LED values, and diagnostic counters persist. If physical LED transmission has already
-started, it MUST be allowed to finish, but its old-session acknowledgement is discarded. A pending
-`Show` that has not started MUST be canceled and its acknowledgement discarded. This pending-Show
-cancellation is the sole exception; no other accepted operation is rolled back.
-
-Consequently, a newly connected host MUST NOT assume power-on defaults or known staging contents. It
-MAY send INFO and CONFIG-query requests in either order, but MUST obtain compatible INFO before
-sending configuration, pixel, Show, Reset, or vendor requests. It SHOULD request the current
-configuration and MUST overwrite or reset pixel state before issuing a `Show` unless intentionally
-preserving the previous session's content. A `Reset` remains the explicit operation for restoring
-power-on state.
-
-Bindings define observable boundaries as follows:
-
-- `usb-cdc`: a session begins when the CDC data interface is opened (DTR asserted) and ends when DTR
-  is deasserted, the USB device disconnects, or the interface is reset;
-- `tcp`: a session is one established TCP connection;
-- `bluetooth-spp`: a session is one established RFCOMM channel;
-- `uart`: UART has no intrinsic open/close event. One session begins when the device initializes the
-  link and continues until device/link reset, unless the binding documents an out-of-band boundary
-  signal. Merely reopening a host serial handle does not create a device-observable new session. A
-  UART overrun is a transport failure even if frame parsing later resynchronizes.
-
-
 ## Conformance
 
 The canonical Opalinx wire examples are published in the
@@ -905,6 +872,25 @@ An implementation is considered **Opalinx** 1.0 conformant if it:
 - Rejects identifiers in reserved request ranges with `ERR_UNKNOWN_IDENTIFIER`.
 
 
+## Example Session
+
+A typical client session driving 300 RGB LEDs per channel on an 8-channel device:
+
+1. Client opens serial connection.
+2. Client sends `Request Device Information` (`0x01`) to verify device presence and capabilities;
+   device responds with `INFO` (`0x81`).
+3. Client sends `Configure Device` (`0x20`) with channel `255`, GRB color order, the WS2811 800 kHz
+   protocol, and 300 LEDs per channel; device responds with `CONFIG` (`0xA0`).
+4. Client sends `Set Pixels` (`0x40`) for channel 0 with 900 bytes (300 × 3) of pixel data.
+5. Client sends `Set Pixels` for channels 1 through 7 in the same manner.
+6. Client sends `Show` (`0x50`) with channel `255` to commit all eight channels simultaneously to
+   the LEDs.
+7. Client repeats steps 4–6 for each new frame.
+
+For installations where all channels display the same content (mirror mode), steps 4–5 collapse
+into a single `Set Pixels` with channel `255`.
+
+
 ## Security Considerations
 
 **Opalinx** 1.0 provides no authentication, authorization, or encryption. It assumes the underlying
@@ -930,8 +916,9 @@ over altered data. **Opalinx** offers no mechanism to detect or prevent delibera
 **Opalinx** is a centrally governed protocol. The author and maintainer of this repository is the sole
 authority for publishing official versions of the **Opalinx** specification.
 
-Proposed changes, clarifications, and extensions may be submitted for discussion, but only versions
-published by the official **Opalinx** repository are considered authoritative.
+Proposed changes, clarifications, and extensions may be debated in
+[GitHub Discussions](https://github.com/djipco/opalinx-spec/discussions), but only versions published
+by the official **Opalinx** repository are considered authoritative.
 
 
 ## License Summary
@@ -971,8 +958,10 @@ official **Opalinx** specification published by the author.
 
 ## Contributing
 
-Feedback, questions, and proposed extensions are welcome. Please open an issue on this repository
-to discuss changes before submitting pull requests against the specification text.
+Feedback and questions are welcome. Please use
+[GitHub Discussions](https://github.com/djipco/opalinx-spec/discussions) to debate ideas, proposed
+changes, clarifications, and extensions before submitting pull requests against the specification
+text.
 
 
 ## Author
