@@ -148,10 +148,10 @@ send an `ERROR` response.
 
 ### Core stream contract
 
-**Opalinx** 1.0 is defined over one full-duplex, reliable, ordered byte stream connecting one host to
-one device. A conforming core binding MUST:
+**Opalinx** 1.0 is defined over a reliable, ordered, bidirectional byte transport connecting one host
+to one device. A conforming core binding MUST:
 
-- deliver accepted bytes once, in order, without insertion or duplication;
+- deliver accepted bytes once, in order, without insertion or duplication in each direction;
 - preserve the complete COBS-encoded frame stream, including `0x00` delimiters;
 - expose connection loss as a transport failure rather than silently reconnecting a new peer into an
   existing Opalinx session;
@@ -474,10 +474,9 @@ messages targeting that channel, or cleared by a successful `Configure Device`.
 **Response**: Emits [`SHOW_ACK`](#show_ack-0xd0) after LED transmission completes if
 `TxID ≠ 0x0000`; no response if `TxID = 0x0000`. Emits [`ERROR`](#error-0xe0) on failure only if
 `TxID ≠ 0x0000`. Hosts that use a non-zero `TxID` for `Show` and wait for `SHOW_ACK` before
-issuing the next `Show` are guaranteed never to receive `ERR_BUSY`. For high-throughput streaming,
-hosts MUST use acknowledged `Show` requests as described in [Frame Pipelining](#frame-pipelining).
-`TxID = 0x0000` is suitable only when the host deliberately does not pipeline and does not require
-completion or buffer-safety feedback.
+issuing the next `Show` are guaranteed never to receive `ERR_BUSY`. `SHOW_ACK` provides an observable
+completion boundary for pacing under [Frame Pipelining](#frame-pipelining); a Show with
+`TxID = 0x0000` provides no completion or rejection feedback.
 
 ### Frame Pipelining
 
@@ -628,10 +627,10 @@ The Opalinx 1.0 standard records are:
 | Type   | Name                | Requirement | Value                                             |
 |--------|---------------------|-------------|---------------------------------------------------|
 | `0x01` | Firmware version    | Required    | Exactly 3 bytes: major, minor, patch              |
-| `0x02` | Device name         | Optional    | UTF-8, `0`–`255` bytes; omission means no name    |
-| `0x03` | Hardware revision   | Required    | UTF-8, `1`–`63` bytes                             |
-| `0x04` | Hardware platform   | Required    | UTF-8, `1`–`63` bytes                             |
-| `0x05` | Transport           | Required    | UTF-8 identifier, `1`–`63` bytes                  |
+| `0x02` | Device name         | Optional    | UTF-8, `1`–`255` bytes; omission means no name    |
+| `0x03` | Hardware revision   | Optional    | UTF-8, `1`–`63` bytes                             |
+| `0x04` | Hardware platform   | Optional    | UTF-8, `1`–`63` bytes                             |
+| `0x05` | Transport           | Optional    | UTF-8 identifier, `1`–`63` bytes                  |
 | `0x06` | Supported signaling protocols | Conditional | Complete ascending set of accepted one-byte protocol values |
 | `0xFF` | Vendor information  | Optional    | Namespaced vendor-information envelope            |
 
@@ -641,17 +640,16 @@ standard records in ascending type order for deterministic diagnostics. Adding a
 additive and does not change the offsets or interpretation of the fixed prefix. Changing, removing,
 or reordering a fixed field requires an incompatible protocol revision.
 
-`hardware_revision`, `hardware_platform`, and `transport` records are mandatory, non-empty UTF-8
-strings of at most 63 bytes. When a device cannot determine its hardware revision, it MUST report
-`unknown`. The hardware revision is manufacturer-defined; examples include `Rev A`, `1.2`, and
-`unknown`.
+When present, `hardware_revision`, `hardware_platform`, and `transport` are non-empty UTF-8 strings
+of at most 63 bytes. Omission means that the information is unavailable. Hardware revision is
+manufacturer-defined; examples include `Rev A` and `1.2`.
 
-The `hardware_platform` field identifies the processor, module, or computing platform on which the
+The optional `hardware_platform` field identifies the processor, module, or computing platform on which the
 controller firmware runs. Examples include `ESP32-P4`, `Teensy 4.1`, and `RP2040`. It is
 informational and does not imply particular capabilities; clients MUST accept and expose unknown
-values. When a device cannot determine its platform, it MUST report `unknown`.
+values.
 
-The `transport` field identifies the active transport carrying the current Opalinx connection. It
+The optional `transport` field identifies the active transport carrying the current Opalinx connection. It
 does not identify intermediate adapters: a controller receiving Opalinx through a UART reports
 `uart`, even when the host reaches that UART through a USB-to-UART bridge. Standard transport
 identifiers are lowercase ASCII:
@@ -879,18 +877,23 @@ An implementation is considered **Opalinx** 1.0 conformant if it:
 A typical client session driving 300 RGB LEDs per channel on an 8-channel device:
 
 1. Client opens serial connection.
-2. Client sends `Request Device Information` (`0x01`) to verify device presence and capabilities;
-   device responds with `INFO` (`0x81`).
-3. Client sends `Configure Device` (`0x20`) with channel `255`, GRB color order, the WS2811 800 kHz
-   protocol, and 300 LEDs per channel; device responds with `CONFIG` (`0xA0`).
-4. Client sends `Set Pixels` (`0x40`) for channel 0 with 900 bytes (300 × 3) of pixel data.
-5. Client sends `Set Pixels` for channels 1 through 7 in the same manner.
-6. Client sends `Show` (`0x50`) with channel `255` to commit all eight channels simultaneously to
-   the LEDs.
-7. Client repeats steps 4–6 for each new frame.
+2. Client sends `Request Device Information` (`0x01`) with a nonzero transaction ID and waits for
+   the corresponding `INFO` (`0x81`).
+3. Client sends `Configure Device` (`0x20`) with a new nonzero transaction ID, channel `255`, GRB
+   color order, the WS2811 800 kHz protocol, and 300 LEDs per channel. It waits for the corresponding
+   `CONFIG` (`0xA0`).
+4. Client sends `Set Pixels` (`0x40`) with transaction ID zero for channel 0 and 900 bytes
+   (300 × 3) of pixel data.
+5. Client sends `Set Pixels` with transaction ID zero for channels 1 through 7 in the same manner.
+6. Client sends `Show` (`0x50`) with a new nonzero transaction ID and channel `255` to commit all
+   eight channels simultaneously. It waits for the corresponding `SHOW_ACK` (`0xD0`).
+7. Client repeats steps 4–6 for each new frame, using a new nonzero Show transaction ID each time.
 
 For installations where all channels display the same content (mirror mode), steps 4–5 collapse
 into a single `Set Pixels` with channel `255`.
+
+This example uses lock-step operation for clarity. A host may prepare and queue the next frame while
+a Show is active by following [Frame Pipelining](#frame-pipelining).
 
 
 ## Security Considerations
@@ -898,15 +901,11 @@ into a single `Set Pixels` with channel `255`.
 **Opalinx** 1.0 provides no authentication, authorization, or encryption. It assumes the underlying
 transport is trusted.
 
-For USB serial connections this assumption is reasonable: physical access to the host is required
-to open the port, which implies the ability to control any connected device.
-
-For network transports (TCP, Bluetooth RFCOMM/SPP), the assumption does not hold automatically.
-Any endpoint that can reach the device's network address or Bluetooth service can send arbitrary
-**Opalinx** commands — configuring channels, overwriting pixel buffers, and issuing resets — without
-any credential. Deployments using these transports MUST secure the transport layer externally
-(e.g., TLS for TCP, authenticated pairing for Bluetooth) or restrict access at the network or
-OS level before exposing an **Opalinx** device.
+Transport trust is a property of the deployment, not of the transport type. USB, UART, TCP, and
+Bluetooth do not inherently prevent unauthorized software or users from sending **Opalinx**
+commands. Where unauthorized access is possible, deployments MUST protect the transport externally,
+using controls appropriate to the environment, such as physical access control, operating-system
+device permissions, network isolation, or an authenticated and encrypted transport binding.
 
 The CRC-16 checksum detects accidental bit errors in transit; it does not provide tamper
 protection. An attacker with the ability to modify frames in transit can recompute a valid CRC
