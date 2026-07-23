@@ -787,7 +787,8 @@ Type assignments are divided into these ranges:
 | `0x00`          | Reserved; senders MUST NOT emit                              |
 | `0x01`–`0x05`   | Standard Opalinx 1.0 information records                         |
 | `0x06`          | Supported signaling-protocol values                           |
-| `0x07`–`0x7E`   | Standard records assigned by future Opalinx specifications    |
+| `0x07`          | Extended capability identifiers                                |
+| `0x08`–`0x7E`   | Standard records assigned by future Opalinx specifications    |
 | `0x7F`          | Standard namespaced vendor-information envelope               |
 | `0x80`–`0xFF`   | Private vendor records for coordinated closed systems         |
 
@@ -812,6 +813,7 @@ The Opalinx 1.0 standard records are:
 | `0x04` | Hardware platform   | Required    | UTF-8, `1`–`63` bytes                             |
 | `0x05` | Transport           | Required    | UTF-8 identifier, `1`–`63` bytes                  |
 | `0x06` | Supported signaling protocols | Optional | Distinct one-byte protocol values; non-empty |
+| `0x07` | Extended capabilities | Optional | Strictly increasing 16-bit standard capability IDs |
 | `0x7F` | Vendor information  | Optional    | Namespaced vendor-information envelope            |
 
 Every required record MUST occur exactly once. A known standard record with an invalid length or a
@@ -824,6 +826,19 @@ When present, the `0x06` record lists every signaling-protocol value the device 
 `Configure Device`, in ascending numeric order. Values are one byte each, the record MUST be
 non-empty, no value may repeat, and `0x00` MUST be present. Unknown values are retained as numbers;
 their presence does not make INFO incompatible.
+
+When present, the `0x07` record lists additional boolean capabilities as unsigned 16-bit
+little-endian identifiers in strictly increasing order. The value MUST be non-empty and have an
+even length. IDs `0x0020`–`0x7FFF` are assigned by future Opalinx specifications; IDs below
+`0x0020` are represented only by the fixed capability bitfield and MUST NOT appear in this record.
+No extended capability IDs are assigned by Opalinx 1.0. Receivers MUST retain or ignore unknown
+IDs without rejecting the device. Vendor-specific features MUST use the namespaced vendor-information
+envelope rather than allocating IDs from this standard range.
+
+Capability flags and extended capability IDs are reserved for simple boolean facts. A feature with
+parameters, variants, limits, or negotiation rules MUST use a dedicated information record or
+extension definition instead of consuming one capability per variant. For example, supported
+signaling protocols are advertised by record `0x06`, not by capability flags.
 
 The `0x7F` vendor-information value contains namespace length (1 byte), namespace, vendor record ID
 (2 bytes little-endian), and vendor data. Namespace syntax and ownership match the Namespaced Vendor
@@ -841,6 +856,10 @@ and MUST NOT be used for reusable or independently published metadata.
 | 3–31 | Reserved                 | MUST be `0` in senders; MUST be ignored by receivers           |
 
 Clients MUST ignore unknown capability bits to remain forward-compatible.
+
+The fixed 32-bit field holds foundational capabilities that are useful to nearly every host. Future
+boolean features SHOULD normally use the extended-capabilities record so adding them does not consume
+scarce fixed-prefix bits.
 
 The mandatory one-deep `Show` queue is **not** a capability bit or INFO field. Every conformant
 device supports one actively transmitting plus one queued `Show` as part of the base contract (see
