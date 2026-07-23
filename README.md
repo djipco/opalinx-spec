@@ -831,8 +831,8 @@ signaling protocols are advertised by record `0x06`, not by capability flags.
 The `0x7F` vendor-information value contains namespace length (1 byte), namespace, vendor record ID
 (2 bytes little-endian), and vendor data. Namespace syntax and ownership match the Namespaced Vendor
 Request. Type `0x7F` MAY repeat because each `(namespace, vendor record ID)` pair is independently
-identified; a sender MUST NOT repeat the same pair. Private types `0x80`–`0xFF` are collision-prone
-and MUST NOT be used for reusable or independently published metadata.
+identified; a sender MUST NOT repeat the same pair. Reserved types `0x80`–`0xFF` MUST NOT be used as
+private extension points.
 
 **Capability flags** (bit positions within the 32-bit little-endian field):
 
@@ -975,12 +975,16 @@ an error-response loop.
 | `0x07`        | Reserved                     | Reserved for future specification versions        |
 | `0x08`        | `ERR_DEVICE_FAULT`           | Device failed to complete an otherwise-valid operation |
 | `0x09`–`0x7F` | Reserved                     | Reserved for future specification versions        |
-| `0x80`–`0xFF` | Vendor-specific              | Available for vendor-specific error codes         |
+| `0x80`–`0xFF` | Reserved                     | Reserved for future specification versions        |
 
 Devices SHOULD emit the most specific applicable error code. `ERR_UNSPECIFIED` is reserved for
 conditions not covered by any other code and SHOULD NOT be used when a more specific code applies.
 Hosts MUST accept and expose an unknown error code numerically; an unknown code does not make the
 otherwise well-formed `ERROR` response malformed.
+
+Vendor commands use standard `ERROR` codes for envelope, parameter, support, busy, and device-fault
+conditions defined by the core protocol. Any additional command-specific status or error detail is
+carried in the namespaced vendor response payload; vendors MUST NOT allocate private `ERROR` codes.
 
 `ERR_BUSY` governs requests that exceed the one-Show backlog or require mutable pixel/configuration
 state that is not currently available. The normative cases are defined by the
