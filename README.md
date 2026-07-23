@@ -168,12 +168,13 @@ correlate them by transaction ID. `Show` acknowledgement ordering and the `Reset
 by those messages.
 
 
-## Transport Bindings
+## Transport and Sessions
 
-### Core stream contract
+### Core transport contract
 
 **Opalinx** 1.0 is defined over a reliable, ordered, bidirectional byte transport connecting one host
-to one device. A conforming core binding MUST:
+to one device. Discovery, connection establishment, and transport-specific configuration are outside
+the scope of this specification. A conforming transport MUST:
 
 - deliver accepted bytes once, in order, without insertion or duplication in each direction;
 - preserve the complete COBS-encoded frame stream, including `0x00` delimiters;
@@ -206,14 +207,14 @@ configuration and MUST overwrite or reset pixel state before issuing a `Show` un
 preserving the previous session's content. A `Reset` remains the explicit operation for restoring
 the LED-control state to device-defined defaults.
 
-Bindings define observable boundaries as follows:
+The standard transport identifiers define observable session boundaries as follows:
 
 - `usb-cdc`: a session begins when the CDC data interface is opened (DTR asserted) and ends when DTR
   is deasserted, the USB device disconnects, or the interface is reset;
 - `tcp`: a session is one established TCP connection;
 - `bluetooth-spp`: a session is one established RFCOMM channel;
 - `uart`: UART has no intrinsic open/close event. One session begins when the device initializes the
-  link and continues until device/link reset, unless the binding documents an out-of-band boundary
+  link and continues until device/link reset, unless the transport provides an out-of-band boundary
   signal. Merely reopening a host serial handle does not create a device-observable new session. A
   UART overrun is a transport failure even if frame parsing later resynchronizes.
 
