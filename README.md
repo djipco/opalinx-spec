@@ -148,6 +148,17 @@ declared length, identifier and direction, and message-specific structure before
 It reports failures locally, discards the candidate, continues at the next delimiter, and MUST NOT
 send an `ERROR` response.
 
+### Request and Response Ordering
+
+A device MUST evaluate complete requests in the order received. Each request is evaluated against
+the protocol state resulting from all earlier accepted requests, including requests with transaction
+ID zero.
+
+Unless a message defines an ordering barrier, its response may be emitted whenever the operation
+reaches its specified response point. Responses therefore need not follow request order; hosts MUST
+correlate them by transaction ID. `Show` acknowledgement ordering and the `Reset` barrier are defined
+by those messages.
+
 
 ## Transport Bindings
 
