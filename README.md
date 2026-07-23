@@ -89,14 +89,13 @@ The format used is **CRC-16/CCITT-FALSE** with the following parameters:
 **Opalinx** frames are encoded with
 [Consistent Overhead Byte Stuffing (COBS)](https://en.wikipedia.org/wiki/Consistent_Overhead_Byte_Stuffing)
 and terminated with a single `0x00` delimiter byte. The encoded frame is guaranteed not to contain
-`0x00`. Receivers resynchronize at each delimiter and MUST bound the memory used to accumulate an
-encoded frame.
+`0x00`.
 
 ### Frame Size
 
-The protocol supports a maximum payload length of 65535 bytes (16-bit unsigned integer). Every
-implementation MUST accept at least 9 payload bytes, enough for one RGBW `Set Pixels` operation
-(`5` addressing bytes + `4` component bytes).
+The protocol supports a maximum payload length of 65535 bytes (16-bit unsigned integer). A host MUST
+accept any response payload up to that maximum. Every device MUST accept at least 9 request payload
+bytes, enough for one RGBW `Set Pixels` operation (`5` addressing bytes + `4` component bytes).
 
 Each device advertises the largest request payload it accepts in the `max_payload_length` field of
 the `INFO` response. This is a wire limit, not a statement about storage or processing architecture.
@@ -104,12 +103,12 @@ Clients MUST derive their chunk size from that field and MUST NOT send a request
 the advertised value. The rejection and recovery rules for requests exceeding this limit are defined
 in [Receiver Framing and Recovery](#receiver-framing-and-recovery).
 
+The applicable encoded-frame limit MUST accommodate the seven decoded framing bytes, the largest
+payload the endpoint is required to accept, and worst-case COBS overhead.
+
 ### Receiver Framing and Recovery
 
-Each endpoint MUST limit the bytes retained between delimiters. A device MUST accept a frame carrying
-any request payload up to its advertised `max_payload_length`; a host MUST accept a frame carrying
-any response payload up to 65535 bytes. The corresponding encoded-frame limit includes the seven
-decoded framing bytes and worst-case COBS overhead.
+Each endpoint MUST limit the bytes retained between delimiters to its applicable encoded-frame limit.
 
 An empty run between delimiters is ignored. If a run exceeds the applicable encoded-frame limit, the
 receiver MUST discard it through its terminating delimiter without decoding, responding, or changing
@@ -446,8 +445,8 @@ no response if `TxID = 0x0000`. Emits [`ERROR`](#error-0xe0) on failure only if 
 
 ### Show (`0x50`)
 
-Commits buffered channel data (from `Set Pixels` and `Fill Channel`) to the physical LEDs. Can
-target a single channel or commit all channels atomically.
+Commits buffered channel data (from `Set Pixels` and `Fill Channel`) to all physical LED channels
+simultaneously.
 
 | TRANSACTION ID | IDENTIFIER | PAYLOAD LENGTH | PAYLOAD                  | CHECKSUM |
 |----------------|------------|----------------|--------------------------|----------|
@@ -463,8 +462,7 @@ target a single channel or commit all channels atomically.
 
 **Buffer persistence**: Each channel's buffer is initialized to all-zeros at power-on and persists
 across `Show` messages, being overwritten only by subsequent `Set Pixels` or `Fill Channel`
-messages targeting that channel, or cleared by a successful `Configure Device`. This allows
-channels to be updated at independent frame rates.
+messages targeting that channel, or cleared by a successful `Configure Device`.
 
 **Response**: Emits [`SHOW_ACK`](#show_ack-0xd0) after LED transmission completes if
 `TxID ≠ 0x0000`; no response if `TxID = 0x0000`. Emits [`ERROR`](#error-0xe0) on failure only if
@@ -516,7 +514,7 @@ clears all channel buffers to zero, and outputs zeros to the physical LEDs.
 
 **Response**: With a nonzero transaction ID, [`RESET_ACK`](#reset_ack-0xd1) after LED transmission
 completes, or [`ERROR`](#error-0xe0) on failure. A Reset carrying transaction ID zero produces no
-response. Because Reset is a management command, hosts SHOULD always use a nonzero transaction ID.
+response.
 
 ### Namespaced Vendor Request (`0x7F`)
 
@@ -821,9 +819,7 @@ The canonical Opalinx wire examples are published in the
 For conformance, **recognize** means parsing the standard identifier, applying the specified
 validation order, and returning a specific result or error rather than `ERR_UNKNOWN_IDENTIFIER`.
 **Support** means successfully executing every otherwise-valid instance within the limits the device
-advertises. Recognizing a capability-gated operation and returning `ERR_UNSUPPORTED` when that
-capability is not advertised is conformant; advertising a capability and then rejecting an
-otherwise-valid use of it is not.
+advertises.
 
 Every conformant device MUST recognize all standard 1.0 request identifiers. The required successful
 baseline is:
@@ -839,9 +835,8 @@ baseline is:
 | RGB and RGBW configuration and data | Mandatory |
 | Additional signaling protocols | Mandatory only for values advertised in INFO record `0x06` |
 
-An optional capability or advertised protocol value is a behavioral promise, not merely descriptive
-metadata. Devices MUST NOT advertise features they implement only for a subset of otherwise-valid
-inputs unless that limitation is itself defined and advertised by the feature's specification.
+An advertised protocol value is a behavioral promise, not merely descriptive metadata. A device MUST
+support that protocol for every otherwise-valid use.
 
 An implementation is considered **Opalinx** 1.0 conformant if it:
 
