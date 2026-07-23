@@ -771,11 +771,9 @@ Type assignments are divided into these ranges:
 | Range           | Purpose                                                     |
 |-----------------|-------------------------------------------------------------|
 | `0x00`          | Reserved; senders MUST NOT emit                              |
-| `0x01`–`0x05`   | Standard Opalinx 1.0 information records                         |
-| `0x06`          | Supported signaling-protocol values                           |
-| `0x07`–`0x7E`   | Standard records assigned by future Opalinx specifications    |
-| `0x7F`          | Standard namespaced vendor-information envelope               |
-| `0x80`–`0xFF`   | Reserved for future specification versions                    |
+| `0x01`–`0x06`   | Standard Opalinx 1.0 information records                      |
+| `0x07`–`0xFE`   | Reserved for future standard Opalinx information records      |
+| `0xFF`          | Standard namespaced vendor-information envelope               |
 
 The outer INFO payload length terminates the extension area; no end marker or padding is permitted.
 Every record, including an unknown record, MUST fit completely within that payload. A truncated TLV
@@ -798,7 +796,7 @@ The Opalinx 1.0 standard records are:
 | `0x04` | Hardware platform   | Required    | UTF-8, `1`–`63` bytes                             |
 | `0x05` | Transport           | Required    | UTF-8 identifier, `1`–`63` bytes                  |
 | `0x06` | Supported signaling protocols | Conditional | Complete ascending set of accepted one-byte protocol values |
-| `0x7F` | Vendor information  | Optional    | Namespaced vendor-information envelope            |
+| `0xFF` | Vendor information  | Optional    | Namespaced vendor-information envelope            |
 
 Every required record MUST occur exactly once. A known standard record with an invalid length or a
 duplicate known record makes INFO malformed. Record order has no meaning; senders SHOULD emit
@@ -818,11 +816,11 @@ limits, or negotiation rules MUST use a dedicated information record or extensio
 instead of consuming one capability per variant. For example, supported signaling protocols are
 advertised by record `0x06`, not by capability flags.
 
-The `0x7F` vendor-information value contains namespace length (1 byte), namespace, vendor record ID
+The `0xFF` vendor-information value contains namespace length (1 byte), namespace, vendor record ID
 (2 bytes little-endian), and vendor data. Namespace syntax and ownership match the Namespaced Vendor
-Request. Type `0x7F` MAY repeat because each `(namespace, vendor record ID)` pair is independently
-identified; a sender MUST NOT repeat the same pair. Reserved types `0x80`–`0xFF` MUST NOT be used as
-private extension points.
+Request. Type `0xFF` MAY repeat because each `(namespace, vendor record ID)` pair is independently
+identified; a sender MUST NOT repeat the same pair. Types `0x07`–`0xFE` MUST NOT be used as private
+extension points.
 
 **Capability flags** (bit positions within the 32-bit little-endian field):
 
