@@ -21,8 +21,7 @@ Both 3-component (RGB) and 4-component (RGBW) chips are supported.
 
 **Opalinx** assumes a trusted, single-client transport binding that presents a reliable, ordered byte
 stream. The core protocol does not define retransmission, duplicate suppression, network addressing,
-authentication, or fixture personality modeling. Packet and unreliable transports require a
-separate binding and are not core Opalinx 1.0 transports.
+authentication, or fixture personality modeling.
 
 
 ## Conventions
