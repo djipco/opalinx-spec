@@ -361,9 +361,13 @@ unnecessary round-trips.
 | `0x08` | GRBW  | `0x12` | RWGB  | `0x1C` | BRWG  |
 | `0x09` | GBRW  | `0x13` | RWBG  | `0x1D` | BGWR  |
 
-Values `0x00`–`0x05` are 3-component (RGB) and `0x06`–`0x1D` are 4-component (RGBW). All other
-values are reserved and MUST be rejected with `ERR_INVALID_PARAMETER`. Devices that do not
-advertise `CAP_RGBW` MUST reject 4-component color orders with `ERR_UNSUPPORTED`.
+Values `0x00`–`0x05` are 3-component (RGB) and `0x06`–`0x1D` are 4-component (RGBW). Other values
+are unassigned in 1.0 and MUST be rejected with `ERR_INVALID_PARAMETER`. Devices that do not
+advertise `CAP_RGBW` MUST reject 4-component color orders with `ERR_UNSUPPORTED`. CONFIG readers
+MUST preserve and expose an unknown numeric color-order value rather than rejecting the entire
+response; a host MUST NOT send a color-order value it does not understand. A future pixel format
+with other than three or four components requires new pixel/configuration messages and MUST NOT
+reinterpret this field.
 
 **Protocol values**: select the WS281x signaling protocol — the chip family and its bit timing.
 (Named `protocol` rather than `speed` because the choice is a signaling variant, not merely a data
@@ -375,7 +379,15 @@ rate.)
 | `0x01` | WS2811 at 400 kHz  |
 | `0x02` | WS2813 at 800 kHz  |
 
-All other values are reserved and MUST be rejected with `ERR_INVALID_PARAMETER`.
+Every conformant device MUST support `0x00`. Support for other assigned values is advertised by the
+`Supported signaling protocols` INFO record. A host MUST NOT request a protocol value it does not
+understand, and SHOULD NOT request a value absent from that record. If the record is absent, only
+`0x00` is guaranteed; a host MAY probe another value and handle rejection.
+
+Future same-major specifications MAY assign new values additively. CONFIG readers MUST preserve and
+expose unknown numeric protocol values rather than rejecting the response. A device rejects an
+unassigned value with `ERR_INVALID_PARAMETER` and an assigned but unsupported value with
+`ERR_UNSUPPORTED`.
 
 **LEDs on channel**: A 16-bit unsigned integer, little-endian. Devices MUST reject a value of
 `0` or any value exceeding their capacity with `ERR_INVALID_PARAMETER`.
@@ -774,7 +786,8 @@ Type assignments are divided into these ranges:
 |-----------------|-------------------------------------------------------------|
 | `0x00`          | Reserved; senders MUST NOT emit                              |
 | `0x01`–`0x05`   | Standard Opalinx 1.0 information records                         |
-| `0x06`–`0x7E`   | Standard records assigned by future Opalinx specifications    |
+| `0x06`          | Supported signaling-protocol values                           |
+| `0x07`–`0x7E`   | Standard records assigned by future Opalinx specifications    |
 | `0x7F`          | Standard namespaced vendor-information envelope               |
 | `0x80`–`0xFF`   | Private vendor records for coordinated closed systems         |
 
@@ -798,6 +811,7 @@ The Opalinx 1.0 standard records are:
 | `0x03` | Hardware revision   | Required    | UTF-8, `1`–`63` bytes                             |
 | `0x04` | Hardware platform   | Required    | UTF-8, `1`–`63` bytes                             |
 | `0x05` | Transport           | Required    | UTF-8 identifier, `1`–`63` bytes                  |
+| `0x06` | Supported signaling protocols | Optional | Distinct one-byte protocol values; non-empty |
 | `0x7F` | Vendor information  | Optional    | Namespaced vendor-information envelope            |
 
 Every required record MUST occur exactly once. A known standard record with an invalid length or a
@@ -805,6 +819,11 @@ duplicate known record makes INFO malformed. Record order has no meaning; sender
 standard records in ascending type order for deterministic diagnostics. Adding a standard record is
 additive and does not change the offsets or interpretation of the fixed prefix. Changing, removing,
 or reordering a fixed field requires an incompatible protocol revision.
+
+When present, the `0x06` record lists every signaling-protocol value the device accepts in
+`Configure Device`, in ascending numeric order. Values are one byte each, the record MUST be
+non-empty, no value may repeat, and `0x00` MUST be present. Unknown values are retained as numbers;
+their presence does not make INFO incompatible.
 
 The `0x7F` vendor-information value contains namespace length (1 byte), namespace, vendor record ID
 (2 bytes little-endian), and vendor data. Namespace syntax and ownership match the Namespaced Vendor
