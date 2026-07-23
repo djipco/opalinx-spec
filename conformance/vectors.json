@@ -1,7 +1,7 @@
 {
   "$schema": "./schema.json",
   "corpus_version": 5,
-  "protocol_version": "1.0.0",
+  "protocol_version": "1.0.0-alpha.0",
   "valid_frames": [
     {
       "name": "get_info_tx_zero",

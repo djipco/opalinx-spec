@@ -1,11 +1,11 @@
 # Opalinx Protocol Specification
-### Version: 1.0.0 (Draft)
+### Version: 1.0.0-alpha.0
 
 > [!WARNING]
-> **Opalinx 1.0 is a Draft.** The `1.0.0` number is the target wire contract, but the specification is
-> still being stabilized and breaking changes may occur before it is frozen. Implementations remain
-> on independent prerelease version lines until then. Protocol, firmware, and library versions are
-> independent; a change to one does not imply a version change to the others.
+> **This is a prerelease specification and is not production-ready.** Breaking changes may occur
+> before `1.0.0`. Implementations of different prerelease versions are not assumed compatible.
+> Protocol, firmware, and library versions are independent; changing one does not imply a version
+> change to the others.
 
 **Opalinx** is a lightweight binary protocol that allows interfacing with compatible LED controllers
 over a reliable byte stream (typically, serial over USB).
@@ -54,66 +54,27 @@ separate binding and are not core Opalinx 1.0 transports.
   receiver behavior explicitly. Merely labeling a field "reserved" does not authorize a receiver to
   ignore nonzero contents.
 
-- **Versioning**: Protocol-version compatibility follows the wire-specific rules in
-  [Protocol Version Compatibility](#protocol-version-compatibility). Package and firmware release
-  versions are independent of the protocol version.
+- **Versioning**: Specification releases follow
+  [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html), subject to the compact wire
+  representation described below. Package and firmware release versions are independent.
 
 
-## Protocol Version Compatibility
+## Versioning and wire compatibility
 
-The three protocol-version bytes in `INFO` describe the wire protocol implemented by the device,
-not its firmware release. A device implementing version `M.m.p` MUST implement the complete base
-contract for major `M` through minor `m` plus any patch-level corrections through `p`.
+Specification releases follow [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
+The current `1.0.0-alpha.0` prerelease is unstable and does not promise compatibility with another
+prerelease. Maintained implementations pin the exact specification and conformance corpus they use.
 
-### Major version
+The three protocol-version bytes at the start of `INFO` carry only the SemVer core
+`major.minor.patch`; they do not encode prerelease or build metadata. Thus an implementation of this
+prerelease reports `1.0.0` on the wire. These bytes identify the wire contract, not the firmware or
+library release.
 
-A different major version is potentially incompatible. A host MUST reject a device whose protocol
-major it does not implement and MUST NOT send configuration, pixel, or control requests to it.
-
-The first three payload bytes of the `INFO` response are a stable **compatibility preamble**—major,
-minor, patch—in that order. A host MUST inspect these bytes before parsing the version-specific
-remainder of `INFO`. If the major is unsupported, the host MUST stop parsing after the preamble and
-report an unsupported-protocol error. This lets a future major change the remainder of `INFO`
-without being misreported as a malformed response by an older host. An `INFO` payload shorter than
-three bytes is malformed and has no usable version preamble.
-
-### Minor version
-
-Within one major version, a higher minor version is additive. It MAY introduce:
-
-- new request and response identifiers in previously reserved ranges;
-- new capability bits;
-- new `INFO` TLVs;
-- new enum values only where the original field definition requires receivers to tolerate unknown
-  values.
-
-A minor version MUST NOT change the meaning, size, validation order, state transition, or response
-semantics of an existing message or field. It also MUST NOT make a previously optional capability
-mandatory for base-major conformance.
-
-Same-major endpoints interoperate using the base contract and the features they mutually understand.
-A host MUST NOT infer support merely because the device reports a sufficiently high minor version;
-it MUST also use the capability bit, extension record, message definition, or other feature signal
-specified for that feature. A host MAY use a newer device with an older understood minor by ignoring
-unknown capabilities and TLVs and by not sending unknown messages. A newer host MAY use an older
-device but MUST disable features the older device does not advertise.
-
-### Patch version
-
-A patch version MUST NOT change any encoded layout, identifier assignment, accepted value, required
-state transition, or other externally observable wire behavior. It is reserved for editorial
-clarifications, corrected examples, conformance vectors, and implementation fixes that bring behavior
-back to the already-published contract. Same-major compatibility decisions MUST ignore the patch
-number.
-
-### Draft revisions
-
-The Draft warning at the top of this document takes precedence until Opalinx 1.0 is frozen: draft
-implementations are developed as a coordinated set and the `1.0.0` tuple alone does not prove that
-two builds came from the same draft revision. An incompatible draft edit MUST update all maintained
-implementations and conformance vectors together. No independent implementation should claim stable
-Opalinx 1.0 compatibility until the Draft marker is removed. Before that freeze, the project MUST either
-stop making incompatible changes or introduce an explicit on-wire draft-revision discriminator.
+A host MUST inspect the three-byte version preamble before parsing the version-specific remainder of
+`INFO`. An `INFO` payload shorter than three bytes is malformed. If the major version is unsupported,
+the host MUST stop parsing, reject the device, and send no state-changing requests. Within a supported
+major version, feature support is determined by the messages, capability bits, and information records
+defined for those features—not by comparing minor or patch numbers alone.
 
 
 ## General Message Format

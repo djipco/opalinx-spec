@@ -4,6 +4,10 @@ The `vectors.json` file is the canonical, machine-readable set of Opalinx 1.x wi
 examples. Implementations consume this file in their automated tests; examples
 must not be copied into implementation repositories.
 
+`protocol_version` identifies the full Semantic Version of the specification release. The INFO
+vectors carry only its three-byte `major.minor.patch` core because prerelease and build metadata are
+not encoded on the wire.
+
 Hex strings use lowercase, contain no separators, and represent bytes in wire
 order. A valid-frame entry contains all three views of the same message:
 
