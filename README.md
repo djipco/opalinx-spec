@@ -133,12 +133,13 @@ encoded frame.
 
 ### Receiver Framing and Recovery
 
-A receiver MUST bound the amount of data retained for an encoded frame. Its supported maximum
-encoded-frame length MUST be large enough for a frame carrying its advertised `max_payload_length`,
-including the seven decoded framing bytes and worst-case COBS overhead. If a nonzero-delimited run
-exceeds that limit, the receiver MUST discard the entire run through its terminating `0x00`. It MUST
-NOT decode or dispatch any prefix of that run. This rule bounds resource use even if a peer never
-sends a delimiter; it does not prescribe a parser state machine or storage strategy.
+Each endpoint MUST bound the amount of data retained for an encoded frame. A device MUST accept a
+frame carrying any request payload up to its advertised `max_payload_length`. A host MUST accept a
+frame carrying any response payload up to the protocol maximum of 65535 bytes. In both cases the
+supported encoded-frame length includes the seven decoded framing bytes and worst-case COBS
+overhead. If a nonzero-delimited run exceeds the applicable limit, the receiver MUST discard the
+entire run through its terminating `0x00`. It MUST NOT decode or dispatch any prefix of that run.
+This rule does not prescribe a parser state machine or storage strategy.
 
 On receipt of a delimiter, the receiver MUST behave as follows:
 
@@ -194,10 +195,13 @@ discards the candidate, continues at the next delimiter, and MUST NOT send an `E
    request. The device MUST echo the same value in the corresponding response. `0x0000` is a
    reserved sentinel meaning "no correlation required"; hosts MAY use it for fire-and-forget
    requests. A device MUST NOT send any success or `ERROR` response to a request carrying
-   `TxID = 0x0000`. Hosts that increment `TxID` sequentially
-   MUST skip `0x0000` when wrapping, advancing from `0xFFFF` to `0x0001`. Hosts using
-   `TxID = 0x0000` accept that rejection and loss are silent; traffic requiring confirmation or
-   error reporting MUST use a nonzero transaction ID.
+   `TxID = 0x0000`. A host MUST NOT reuse a nonzero transaction ID while a response to its earlier
+   request could still arrive in the same session. Receipt of the response retires that transaction
+   ID; a local timeout alone does not. If correlation can no longer be maintained after a timeout,
+   the host MUST end the session before reusing the transaction ID. Hosts that increment `TxID`
+   sequentially MUST skip `0x0000` when wrapping, advancing from `0xFFFF` to an available nonzero
+   value. Hosts using `TxID = 0x0000` accept that rejection and loss are silent; traffic requiring
+   confirmation or error reporting MUST use a nonzero transaction ID.
 
  - **Identifier**: A single byte identifying the message. `0x00` and `0x80` are reserved and
    MUST NOT be used as message identifiers; `0x00` serves as the sentinel value for "unknown"
@@ -336,8 +340,9 @@ more than 255 channels through the existing INFO and CONFIG messages.
 
 ### Request Device Information (`0x01`)
 
-Queries the device for its identity and protocol compatibility. Clients SHOULD send this as the
-first message after connection establishment.
+Queries the device for its identity and protocol compatibility. Clients MUST obtain and validate
+INFO before sending state-changing or vendor requests in a new session. INFO, CONFIG queries, and
+Ping may otherwise be sent in any order.
 
 | TRANSACTION ID | IDENTIFIER | PAYLOAD LENGTH | CHECKSUM |
 |----------------|------------|----------------|----------|
@@ -944,11 +949,12 @@ vendor contract.
 
 ### ERROR (`0xE0`)
 
-Sent by the device to report a protocol or operational error. Every CRC-valid rejected request with
-a nonzero transaction ID MUST trigger exactly one `ERROR` response. A device MUST NOT respond to a
-request with transaction ID zero, and MUST silently discard uncorrelatable framing and checksum
-failures. Thus a received candidate produces at most one response and device output can never cause
-an error-response loop.
+Sent by the device to report a protocol or operational error. Every retained request that passes
+COBS decoding, minimum-size validation, and CRC validation, but is then rejected, MUST trigger
+exactly one `ERROR` response when its transaction ID is nonzero. A device MUST NOT respond to a
+request with transaction ID zero, and MUST silently discard oversized runs and uncorrelatable
+framing or checksum failures. Thus a received candidate produces at most one response and device
+output can never cause an error-response loop.
 
 | TRANSACTION ID | IDENTIFIER | PAYLOAD LENGTH | PAYLOAD   | CHECKSUM |
 |----------------|------------|----------------|-----------|----------|
@@ -1049,9 +1055,11 @@ started, it MUST be allowed to finish, but its old-session acknowledgement is di
 cancellation is the sole exception; no other accepted operation is rolled back.
 
 Consequently, a newly connected host MUST NOT assume power-on defaults or known staging contents. It
-MUST begin with `Request Device Information`, SHOULD request the current configuration, and MUST
-overwrite or reset pixel state before issuing a `Show` unless intentionally preserving the previous
-session's content. A `Reset` remains the explicit operation for restoring power-on state.
+MAY send INFO, CONFIG-query, and Ping requests in any order, but MUST obtain compatible INFO before
+sending configuration, pixel, Show, Reset, or vendor requests. It SHOULD request the current
+configuration and MUST overwrite or reset pixel state before issuing a `Show` unless intentionally
+preserving the previous session's content. A `Reset` remains the explicit operation for restoring
+power-on state.
 
 Bindings define observable boundaries as follows:
 
