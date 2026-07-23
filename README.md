@@ -603,9 +603,8 @@ one additional `Show` waiting behind it. This fixed backlog is mandatory and req
 negotiation. A third `Show` is rejected with `ERR_BUSY`.
 
 Accepting a `Show` logically captures the staged frame for that operation. Once captured, later
-requests cannot alter it. An implementation may copy pixels, swap buffers, transfer ownership, or
-reserve staging storage until transmission begins; only the observable guarantees below are
-normative.
+requests cannot alter it. This is an observable frame-isolation guarantee, not a storage or
+processing requirement.
 
 The pipeline is global to the device, including when per-channel `Show` is supported:
 
@@ -635,8 +634,7 @@ requests define their own admission rules.
 When the active Show completes:
 
 - with no pending Show, the device enters `IDLE`;
-- with a pending Show, the device starts it, enters `ACTIVE`, and makes storage available for
-  preparation of the following frame.
+- with a pending Show, the device starts it and enters `ACTIVE`.
 
 Only after that transition does the device emit `SHOW_ACK` for the completed Show, if its transaction
 ID is nonzero. A `SHOW_ACK` therefore proves that the named Show has completed and that the host may
@@ -1095,23 +1093,12 @@ transport MUST use a vendor-namespaced `transport` identifier such as
 `bluetooth-le` or claim conformance to a standard Opalinx binding. Its binding document is responsible
 for presenting reliable ordered frame delivery to the Opalinx layer.
 
-**Timeouts**: Hosts MUST implement a timeout when waiting for a response to nonzero-transaction-ID
-messages that produce one (`Request Device Information`, `Request Device Configuration`, `Configure Device`,
-and `Ping`). A suggested timeout is 1 second over USB serial; timeouts may be adjusted for a
-higher-latency conforming binding. When waiting for `SHOW_ACK` or
-`RESET_ACK`, hosts MUST use the component count, configured signaling protocol, LED count, and reset
-interval to calculate the physical frame duration as defined in [Frame Pipelining](#frame-pipelining),
-rather than relying on a fixed timeout. A `Show` accepted while another frame is active may wait for
-the remainder of that active frame and then transmit its own frame before its `SHOW_ACK` is emitted;
-a conservative timeout therefore allows up to two affected-frame durations when both frames have the
-same configuration. With heterogeneous configurations, use the maximum possible remaining duration
-of the active frame plus the duration of the acknowledged frame. A `RESET_ACK` needs one zero-frame
-duration because `Reset` is rejected while output is already active; that frame uses the device's
-power-on default configuration. A host that cached the initial `CONFIG` response can calculate this
-duration directly. Otherwise it SHOULD use the advertised LED limits to derive a conservative bound,
-or fall back to a documented implementation-specific management timeout when those limits are `0`
-(not advertised). Hosts MUST add transport, scheduling, and implementation margin to these physical
-minima.
+**Timeouts**: Opalinx does not define host timeout values. A host MAY impose response timeouts
+appropriate to its transport and application. `SHOW_ACK` and `RESET_ACK` are emitted only after the
+physical operation completes, so their latency can be longer than that of query or configuration
+responses. A timeout is a local observation: it does not prove that the request was rejected or that
+an accepted state-changing operation did not complete. A transport binding MAY publish timing
+guidance without changing the core protocol.
 
 Future versions may define additional stream or packet bindings without changing the core frame
 format, provided each binding supplies the delivery contract above.
