@@ -971,12 +971,13 @@ an error-response loop.
 | `0x00`        | `ERR_UNSPECIFIED`            | Generic error                                     |
 | `0x01`        | `ERR_UNKNOWN_IDENTIFIER`     | Identifier byte not recognized                    |
 | `0x02`        | `ERR_INVALID_PAYLOAD_LENGTH` | Payload length ≠ message's expected size          |
-| `0x03`        | `ERR_CRC_MISMATCH`           | Reserved legacy code; not emitted by the 1.0 stream binding |
+| `0x03`        | Reserved                     | Reserved for future specification versions        |
 | `0x04`        | `ERR_INVALID_PARAMETER`      | A parameter value is out of range                 |
 | `0x05`        | `ERR_BUSY`                   | Device cannot accept the message at this time     |
 | `0x06`        | `ERR_UNSUPPORTED`            | Message valid but unsupported by this device      |
-| `0x07`        | `ERR_FRAMING_ERROR`          | COBS decoding failed or decoded frame is shorter than 7 bytes |
-| `0x08`–`0x7F` | Reserved                     | Reserved for future specification versions        |
+| `0x07`        | Reserved                     | Reserved for future specification versions        |
+| `0x08`        | `ERR_DEVICE_FAULT`           | Device failed to complete an otherwise-valid operation |
+| `0x09`–`0x7F` | Reserved                     | Reserved for future specification versions        |
 | `0x80`–`0xFF` | Vendor-specific              | Available for vendor-specific error codes         |
 
 Devices SHOULD emit the most specific applicable error code. `ERR_UNSPECIFIED` is reserved for
@@ -988,8 +989,7 @@ otherwise well-formed `ERROR` response malformed.
 state that is not currently available. The normative cases are defined by the
 [pipeline admission table](#frame-pipelining).
 
-`ERR_CRC_MISMATCH` and `ERR_FRAMING_ERROR` remain assigned for compatibility with early drafts, but
-the Opalinx 1.0 byte-stream binding does not emit them: neither condition provides a trustworthy
+Framing and checksum failures do not produce error responses because they provide no trustworthy
 nonzero correlation key. Implementations MAY count or expose these failures through local diagnostics.
 
 **Opalinx** 1.0 uses the transaction ID echoed in every response — including `ERROR` responses — to
