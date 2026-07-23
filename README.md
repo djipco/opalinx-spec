@@ -324,8 +324,8 @@ Opalinx 1.0 deliberately uses compact fixed-width addressing:
 | LEDs per channel | 65,535 | Valid configured indices are `0`–`65,534` |
 | Pixel offset and count | 16 bits each | One `Set Pixels` span cannot end beyond exclusive index `65,535` |
 
-Implementations MUST evaluate `LED_offset + LED_count` in arithmetic wide enough to detect overflow;
-wrapping 16-bit addition MUST NOT make an invalid span appear valid.
+The mathematical sum `LED_offset + LED_count` MUST NOT exceed 65,535. A wrapped 16-bit result does
+not make an otherwise invalid span valid.
 
 These are addressing limits, not recommended installation sizes. Larger installations can use
 multiple devices without adding overhead to the normal 1.0 streaming path. If a future specification
@@ -470,10 +470,10 @@ LEDs.
 - `255`: broadcast. Assigns the same color data to all channels simultaneously.
 
 **Color bytes per LED**: Determined by the configured color order: 3 bytes for RGB-family orders,
-4 bytes for RGBW-family orders. Each LED's bytes MUST be supplied in the channel's configured wire
-order (the color order set by `Configure Device`); the device writes them to the strip unchanged and
-never reorders them. Reordering from a logical layout is the host's responsibility. This keeps the
-device free of per-pixel work on the streaming path.
+4 bytes for RGBW-family orders. Each LED's bytes represent component values in the channel's
+configured wire order (the color order set by `Configure Device`). The resulting LED output MUST
+match those wire-order values. A host using a different logical color layout converts it before
+forming the request.
 
 **Payload length**: Equal to `1 + 2 + 2 + (LED_count × bytes_per_LED)`.
 
@@ -515,9 +515,9 @@ buffered; a [`Show`](#show-0x50) message is required to commit.
 | Color byte 4   | 1 byte | Fourth component in wire order; present only when channel is RGBW-configured |
 
 The color is supplied in the channel's configured wire order — exactly as for
-[`Set Pixels`](#set-pixels-0x40) — and the device writes it to every LED unchanged. The device never
-reorders components; converting from a logical layout is the host's responsibility. For example, on a
-`GRB` channel the three bytes are sent in G, R, B order.
+[`Set Pixels`](#set-pixels-0x40) — and the resulting output applies those component values to every
+LED. A host using a different logical color layout converts it before forming the request. For
+example, on a `GRB` channel the three bytes represent G, R, B in that order.
 
 **Payload length**: `4` for RGB-configured channels, `5` for RGBW-configured channels.
 
@@ -581,22 +581,24 @@ completion or buffer-safety feedback.
 
 ### Frame Pipelining
 
-Frame transmission on **WS281x** LEDs takes a fixed, comparatively long time. The duration for one
-channel is:
+For Show completion and acknowledgement, physical transmission includes both LED data and the
+required reset/latch interval. Opalinx 1.0 uses a minimum reset/latch interval of `300 µs` for its
+assigned signaling protocols.
 
-```text
-bits_per_led       = components_per_led × 8
-data_time          = LED_count × bits_per_led × bit_period
-frame_time         = data_time + reset_time
-minimum_reset_time = 300 µs
-```
+> [!NOTE]
+> The following timing calculation is informative. It explains the motivation for pipelining but is
+> not a required implementation technique or a host timeout algorithm.
 
-The protocol values defined by Opalinx use a `1.25 µs` bit period at 800 kHz and a `2.5 µs` bit period
-at 400 kHz. Therefore, excluding the reset interval, one RGB LED takes approximately `30 µs` at
-800 kHz or `60 µs` at 400 kHz; one RGBW LED takes approximately `40 µs` at 800 kHz or `80 µs` at
-400 kHz. For a broadcast `Show`, all channels start together and the physical operation completes
-when the slowest affected channel completes, so its duration is the maximum `frame_time` across the
-affected channels, not the sum of their durations.
+> ```text
+> bits_per_led = components_per_led × 8
+> data_time    = LED_count × bits_per_led × bit_period
+> frame_time   = data_time + reset_time
+> ```
+
+> The assigned Opalinx protocol values use a `1.25 µs` bit period at 800 kHz and a `2.5 µs` bit
+> period at 400 kHz. Excluding the reset interval, one RGB LED therefore takes approximately `30 µs`
+> at 800 kHz or `60 µs` at 400 kHz; one RGBW LED takes approximately `40 µs` at 800 kHz or `80 µs`
+> at 400 kHz. A broadcast completes when its slowest affected channel completes.
 
 A host that waits for `SHOW_ACK` before issuing the next `Show` (the lock-step pattern above) leaves
 the device idle for one host round-trip at every frame boundary, because the device cannot begin the
@@ -1031,7 +1033,6 @@ one device. A conforming core binding MUST:
 
 - deliver accepted bytes once, in order, without insertion or duplication;
 - preserve the complete COBS-encoded frame stream, including `0x00` delimiters;
-- sustain its documented operating rate without routine byte loss or receive overrun;
 - expose connection loss as a transport failure rather than silently reconnecting a new peer into an
   existing Opalinx session;
 - ensure that bytes received before a connection boundary cannot form a frame with bytes received
