@@ -218,9 +218,8 @@ discards the candidate, continues at the next delimiter, and MUST NOT send an `E
    `identifier` + `payload length` + `payload`.
 
 **Frame size**: The protocol supports a maximum payload length of 65535 bytes (16-bit unsigned
-integer). Every implementation MUST accept at least 8 payload bytes, enough for one RGB
-`Set Pixels` operation (`5` addressing bytes + `3` component bytes). A device advertising
-`CAP_RGBW` MUST accept at least 9 payload bytes so one RGBW pixel also fits. Implementations intended
+integer). Every implementation MUST accept at least 9 payload bytes, enough for one RGBW
+`Set Pixels` operation (`5` addressing bytes + `4` component bytes). Implementations intended
 for high-throughput streaming SHOULD accept at least 4101 payload bytes, sufficient for 1365 RGB or
 1024 RGBW LEDs per `Set Pixels` message, but this is a performance recommendation rather than a
 conformance requirement.
@@ -383,12 +382,9 @@ pixel data.
 
 **Channel number**:
 
-- `0` through `N-1`: configures the specified channel. Only supported by devices that advertise
-  `CAP_PER_CHANNEL_CONFIG`; others MUST reject with `ERR_UNSUPPORTED`.
+- `0` through `N-1`: reserved for future per-channel configuration; devices MUST reject with
+  `ERR_UNSUPPORTED`.
 - `255`: broadcast. Applies the same configuration to all channels simultaneously.
-
-Clients SHOULD check `CAP_PER_CHANNEL_CONFIG` before sending per-channel messages to avoid
-unnecessary round-trips.
 
 **Color Order values**:
 
@@ -406,8 +402,8 @@ unnecessary round-trips.
 | `0x09` | GBRW  | `0x13` | RWBG  | `0x1D` | BGWR  |
 
 Values `0x00`–`0x05` are 3-component (RGB) and `0x06`–`0x1D` are 4-component (RGBW). Other values
-are unassigned in 1.0 and MUST be rejected with `ERR_INVALID_PARAMETER`. Devices that do not
-advertise `CAP_RGBW` MUST reject 4-component color orders with `ERR_UNSUPPORTED`. CONFIG readers
+are unassigned in 1.0 and MUST be rejected with `ERR_INVALID_PARAMETER`. Every device MUST support
+both 3-component and 4-component color orders. CONFIG readers
 MUST preserve and expose an unknown numeric color-order value rather than rejecting the entire
 response; a host MUST NOT send a color-order value it does not understand. A future pixel format
 with other than three or four components requires new pixel/configuration messages and MUST NOT
@@ -558,10 +554,8 @@ target a single channel or commit all channels atomically.
 
 **Channel number**:
 
-- `0` through `N-1`: targeted channel number. Only supported by devices that advertise
-  `CAP_PER_CHANNEL_SHOW`; others MUST reject with `ERR_UNSUPPORTED`. Clients SHOULD check
-  `CAP_PER_CHANNEL_SHOW` before sending per-channel `Show` messages to avoid unnecessary
-  round-trips.
+- `0` through `N-1`: reserved for future per-channel transmission; devices MUST reject with
+  `ERR_UNSUPPORTED`.
 - `255`: broadcast. Commits all channels simultaneously, guaranteeing synchronized multi-channel
   updates without inter-channel tearing. Devices MUST start all channel transmissions at the same
   time; this is a hardware conformance requirement.
@@ -717,11 +711,11 @@ Sent in response to [`Request Device Information`](#request-device-information-0
 | Protocol version minor  | 1 byte   | Minor version of the **Opalinx** protocol                      |
 | Protocol version patch  | 1 byte   | Patch version of the **Opalinx** protocol                      |
 | Channel count           | 1 byte   | Number of 1.0-addressable channels (`N`), `1`–`255`          |
-| Capability flags        | 4 bytes  | Bitfield, little-endian; see capability bits below          |
-| Max payload length      | 2 bytes  | Largest accepted request payload, little-endian; MUST be ≥ 8, or ≥ 9 with `CAP_RGBW` |
+| Capability flags        | 1 byte   | Reserved capability bitfield; see below                     |
+| Max payload length      | 2 bytes  | Largest accepted request payload, little-endian; MUST be ≥ 9 |
 | Information records     | variable | TLV records containing identity and extension information   |
 
-The fixed prefix is exactly 10 bytes. Firmware identity and descriptive strings are information records
+The fixed prefix is exactly 7 bytes. Firmware identity and descriptive strings are information records
 so future metadata does not enlarge or reorder the compatibility prefix.
 
 INFO does not advertise configuration limits. A device validates every `Configure Device` request
@@ -757,7 +751,7 @@ other diagnostic details.
 
 #### INFO extensions
 
-Immediately after the 10-byte fixed prefix, the remainder of the INFO payload contains
+Immediately after the 7-byte fixed prefix, the remainder of the INFO payload contains
 type-length-value (TLV) information records. Each record has this structure:
 
 | Field  | Size     | Description                                      |
@@ -811,10 +805,9 @@ complete supported set, including `0x00`, in ascending numeric order. Values are
 record MUST be non-empty, and no value may repeat. Unknown values are retained as numbers; their
 presence does not make INFO incompatible.
 
-Capability flags are reserved for simple boolean facts. A feature with parameters, variants,
-limits, or negotiation rules MUST use a dedicated information record or extension definition
-instead of consuming one capability per variant. For example, supported signaling protocols are
-advertised by record `0x06`, not by capability flags.
+Capability flags are reserved for future simple boolean facts. A feature with parameters, variants,
+limits, or negotiation rules uses a dedicated information record rather than one capability per
+variant. For example, supported signaling protocols are advertised by record `0x06`.
 
 The `0xFF` vendor-information value contains namespace length (1 byte), namespace, vendor record ID
 (2 bytes little-endian), and vendor data. Namespace syntax and ownership match the Namespaced Vendor
@@ -822,20 +815,9 @@ Request. Type `0xFF` MAY repeat because each `(namespace, vendor record ID)` pai
 identified; a sender MUST NOT repeat the same pair. Types `0x07`–`0xFE` MUST NOT be used as private
 extension points.
 
-**Capability flags** (bit positions within the 32-bit little-endian field):
-
-| Bit  | Name                     | Meaning                                                        |
-|------|--------------------------|----------------------------------------------------------------|
-| 0    | `CAP_RGBW`               | Device supports 4-component (RGBW) color orders                |
-| 1    | `CAP_PER_CHANNEL_CONFIG` | Device supports per-channel configuration                      |
-| 2    | `CAP_PER_CHANNEL_SHOW`   | Device supports per‑channel Show                               |
-| 3–31 | Reserved                 | MUST be `0` in senders; MUST be ignored by receivers           |
-
-Clients MUST ignore unknown capability bits to remain forward-compatible.
-
-The fixed 32-bit field holds foundational capabilities that are useful to nearly every host. If a
-future specification needs another capability mechanism, it can assign a new INFO record without
-changing the fixed prefix.
+**Capability flags**: all eight bits are unassigned in Opalinx 1.0. Devices MUST send zero. Hosts
+MUST ignore bits they do not understand. A future specification may assign bits for simple boolean
+features or define an information record when additional or structured capability data is needed.
 
 ### CONFIG (`0x82`, `0xA0`)
 
@@ -1112,9 +1094,7 @@ baseline is:
 | Broadcast Show | Mandatory |
 | Reset | Mandatory |
 | Namespaced vendor request | Envelope validation mandatory; individual namespaces optional |
-| RGBW configuration and data | Mandatory only with `CAP_RGBW` |
-| Per-channel Configure | Mandatory only with `CAP_PER_CHANNEL_CONFIG` |
-| Per-channel Show | Mandatory only with `CAP_PER_CHANNEL_SHOW` |
+| RGB and RGBW configuration and data | Mandatory |
 | Additional signaling protocols | Mandatory only for values advertised in INFO record `0x06` |
 
 An optional capability or advertised protocol value is a behavioral promise, not merely descriptive
