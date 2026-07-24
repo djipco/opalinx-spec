@@ -46,6 +46,7 @@ protocol version. Passing the public conformance corpus does not by itself grant
 permission to use a badge. The badges are reserved Opalinx certification marks and may be used only
 with written permission under a valid commercial licence.
 
-| Device | Host |
-|--------|------|
-| [![Opalinx Certified Device 1.0](../site/assets/badges/opalinx-certified-device-1.0.svg)](../site/assets/badges/opalinx-certified-device-1.0.svg) | [![Opalinx Certified Host 1.0](../site/assets/badges/opalinx-certified-host-1.0.svg)](../site/assets/badges/opalinx-certified-host-1.0.svg) |
+| Scope | White on black | Black on white |
+|-------|----------------|----------------|
+| Device | [![Opalinx Certified Device 1.0 — white on black](../site/assets/badges/opalinx-certified-device-1.0.svg)](../site/assets/badges/opalinx-certified-device-1.0.svg) | [![Opalinx Certified Device 1.0 — black on white](../site/assets/badges/opalinx-certified-device-1.0-black-on-white.svg)](../site/assets/badges/opalinx-certified-device-1.0-black-on-white.svg) |
+| Host | [![Opalinx Certified Host 1.0 — white on black](../site/assets/badges/opalinx-certified-host-1.0.svg)](../site/assets/badges/opalinx-certified-host-1.0.svg) | [![Opalinx Certified Host 1.0 — black on white](../site/assets/badges/opalinx-certified-host-1.0-black-on-white.svg)](../site/assets/badges/opalinx-certified-host-1.0-black-on-white.svg) |
