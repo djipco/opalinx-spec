@@ -860,6 +860,10 @@ correlate device replies with host requests.
 Canonical Opalinx wire examples and observable device-behavior cases are published in the
 [conformance corpus](conformance/README.md).
 
+The corpus supplements this specification but is not exhaustive. Passing every corpus case is
+necessary but not sufficient for conformance; an implementation MUST satisfy all applicable
+normative requirements in this specification.
+
 For conformance, **recognize** means parsing the standard identifier, applying the specified
 validation order, and returning a specific result or error rather than `ERR_UNKNOWN_IDENTIFIER`.
 **Support** means successfully executing every otherwise-valid instance within the limits the device
