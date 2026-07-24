@@ -1012,22 +1012,11 @@ by the official **Opalinx** repository are considered authoritative.
 
 ## License
 
-This repository is licensed under the
-[PolyForm Noncommercial License 1.0.0](LICENSE.md). Commercial use requires a separate license;
-contact Jean-Philippe Cô at <jp@djip.co> for commercial licensing.
-
-
-## Name Usage
-
-The name "**Opalinx**" refers exclusively to the protocol defined by the canonical specification.
-
-Implementations that conform to this specification may be described as **Opalinx**-compatible,
-including when they use the extension mechanisms defined by this specification. A protocol that
-changes or conflicts with the core **Opalinx** requirements must not be described as **Opalinx** or
-**Opalinx**-compatible.
-
-The name "**Opalinx**" may only be used to refer to implementations or documents that conform to the
-official **Opalinx** specification published by the author.
+The specification, conformance materials, software, and Opalinx marks are governed by the
+[Opalinx Noncommercial Licence 1.0](LICENSE.md). Noncommercial use is free. Commercial products and
+services using Opalinx require a separate written licence; contact Jean-Philippe Cô at <jp@djip.co>.
+The same document defines permitted factual references to Opalinx and reserves official branding and
+certification marks.
 
 
 ## Contributing
