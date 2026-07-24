@@ -59,14 +59,16 @@ following unencoded structure:
    requests. A device MUST NOT send any success or `ERROR` response to a request carrying
    `TxID = 0x0000`. A host MUST NOT reuse a nonzero transaction ID while a response to its earlier
    request could still arrive in the same session. Receipt of the response retires that transaction
-   ID; a local timeout alone does not. If correlation can no longer be maintained after a timeout,
-   the host MUST end the session before reusing the transaction ID. Hosts that increment `TxID`
-   sequentially MUST skip `0x0000` when wrapping, advancing from `0xFFFF` to an available nonzero
-   value. Hosts using `TxID = 0x0000` accept that rejection and loss are silent; traffic requiring
-   confirmation or error reporting MUST use a nonzero transaction ID. As an operational practice, a
-   host sending sustained traffic with `TxID = 0x0000` can periodically send a request with a nonzero
-   transaction ID and require its response to confirm that the session remains responsive. This does
-   not confirm delivery of earlier fire-and-forget requests.
+   ID. Receipt of `RESET_ACK` also retires every nonzero transaction ID carried by a request that
+   preceded the acknowledged Reset in the same session. A local timeout alone does not retire an ID.
+   Before reusing an ID whose response may have been lost, the host MUST either receive `RESET_ACK`
+   for a later Reset or end the session. Hosts that increment `TxID` sequentially MUST skip `0x0000`
+   when wrapping, advancing from `0xFFFF` to an available nonzero value. Hosts using
+   `TxID = 0x0000` accept that rejection and loss are silent; traffic requiring confirmation or error
+   reporting MUST use a nonzero transaction ID. As an operational practice, a host sending sustained
+   traffic with `TxID = 0x0000` can periodically send a request with a nonzero transaction ID and
+   require its response to confirm that the session remains responsive. This does not confirm
+   delivery of earlier fire-and-forget requests.
 
  - **Identifier**: A single byte identifying the message. `0x00` and `0x80` are reserved and
    MUST NOT be used as message identifiers; `0x00` serves as the sentinel value for "unknown"
@@ -565,6 +567,13 @@ the Reset has a nonzero transaction ID, `RESET_ACK` is therefore emitted before 
 later request. A Reset with transaction ID zero imposes the same ordering barrier despite producing
 no response.
 
+Before emitting `RESET_ACK`, the device MUST emit every response required for a request evaluated
+before that Reset. After emitting `RESET_ACK`, it MUST NOT emit such a response. Consequently,
+receipt of `RESET_ACK` retires all transaction IDs from requests preceding that Reset. An `ERROR`
+rejecting Reset does not retire any other transaction ID, and a Reset with transaction ID zero
+provides no observable transaction-ID reclamation point. This reclamation path is destructive: it
+also restores the LED-control state to its device-defined defaults as described above.
+
 ### Namespaced Vendor Request (`0x7F`)
 
 Carries an extension command without consuming a globally shared identifier. Its payload is:
@@ -911,7 +920,8 @@ An implementation is considered **Opalinx** 1.0 conformant if it:
   atomically (for broadcast, either all channels are updated or none).
 - Responds to `Reset` with a `RESET_ACK` response after LED transmission completes, and rejects a
   `Reset` received during active transmission with `ERR_BUSY`; an accepted Reset completes before
-  any subsequent request is processed.
+  any subsequent request is processed, and `RESET_ACK` is emitted only after every response required
+  for an earlier request has been emitted.
 - Implements the one-Show backlog, admission, frame-protection, completion, and acknowledgement
   guarantees defined in [Frame Pipelining](#frame-pipelining).
 - Sends `SET_PIXELS_ACK`, `FILL_CHANNEL_ACK`, and `SHOW_ACK` responses for pixel and show
