@@ -241,7 +241,7 @@ The standard transport identifiers define observable session boundaries as follo
 Messages are grouped by purpose. The high bit of the identifier byte distinguishes requests
 (host→device) from responses (device→host).
 
-### Requests (`0x00`–`0x7F`)
+### Requests (`0x01`–`0x7F`)
 
 | Range           | Purpose                                                    |
 |-----------------|------------------------------------------------------------|
@@ -256,7 +256,7 @@ Messages are grouped by purpose. The high bit of the identifier byte distinguish
 | `0x70` – `0x7E` | Reserved                                                   |
 | `0x7F`          | Standard namespaced vendor request envelope                 |
 
-### Responses (`0x80`–`0xFF`)
+### Responses (`0x81`–`0xFF`)
 
 | Range           | Purpose                                                    |
 |-----------------|------------------------------------------------------------|
