@@ -87,6 +87,9 @@ The format used is **CRC-16/CCITT-FALSE** with the following parameters:
  - Initial value: `0xFFFF`
  - No input reflection, no output reflection, no final XOR.
 
+As a check value, CRC-16/CCITT-FALSE over the nine ASCII bytes `123456789` is `0x29B1`. When stored
+in an Opalinx checksum field, this value is transmitted little-endian as bytes `B1 29`.
+
 ### Encoding and Delimiting
 
 **Opalinx** frames are encoded with
