@@ -1,0 +1,806 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Opalinx Workbench</title>
+  <link rel="icon" href="data:," />
+
+  <!-- Set the theme before first paint to avoid a flash. -->
+  <script>
+    document.documentElement.setAttribute('data-theme', localStorage.getItem('opalinx-theme') || 'dark');
+  </script>
+
+  <!-- The import map resolves opalinx (and its djipevents dependency) from node_modules —
+       the normal npm install — instead of a CDN. The desktop build packages those two modules
+       under workbench/node_modules so the same paths resolve there. -->
+  <script type="importmap">
+    {
+      "imports": {
+        "opalinx": "./node_modules/opalinx/src/index.js",
+        "opalinx/webserial": "./node_modules/opalinx/src/transports/webserial.js",
+        "djipevents": "./node_modules/djipevents/dist/esm/djipevents.esm.min.js"
+      }
+    }
+  </script>
+
+  <!-- Classes are toggled dynamically by the inline application module. -->
+  <!--suppress CssUnusedSymbol -->
+  <style>
+    /* ── Design tokens ──────────────────────────────────────────────────────── */
+    :root {
+      color-scheme: dark;
+      --bg: #111318;
+      --surface: #191c23;
+      --surface-2: #20242d;
+      --fg: #e8eaef;
+      --muted: #99a0ad;
+      --border: #2b303b;
+      --control-border: #414956;
+      --accent: #37b6c4;
+      --accent-fg: #06282c;
+      --accent-soft: #37b6c422;
+      --ok: #3fb96a;
+      --warn: #e0a63a;
+      --err: #e05a5a;
+      --radius: 10px;
+      --radius-lg: 14px;
+      --shadow: 0 1px 2px #0006, 0 4px 16px #0003;
+    }
+    :root[data-theme="light"] {
+      color-scheme: light;
+      --bg: #f4f5f7;
+      --surface: #ffffff;
+      --surface-2: #eef0f3;
+      --fg: #1c1f26;
+      --muted: #5c6470;
+      --border: #d8dce3;
+      --control-border: #b9c0cb;
+      --accent: #0e7f8c;
+      --accent-fg: #ffffff;
+      --accent-soft: #0e7f8c1a;
+      --shadow: 0 1px 2px #0000000d, 0 4px 16px #00000010;
+    }
+
+    /* ── Base ───────────────────────────────────────────────────────────────── */
+    * { box-sizing: border-box; }
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font: 14px/1.55 -apple-system, "Segoe UI", system-ui, sans-serif;
+      background:
+        radial-gradient(circle at 50% -10rem, var(--accent-soft), transparent 34rem),
+        var(--bg);
+      color: var(--fg);
+      -webkit-font-smoothing: antialiased;
+    }
+    h1 { font-size: 1.25rem; font-weight: 650; margin: 0; letter-spacing: 0.01em; }
+    h2 { font-size: 0.8rem; font-weight: 650; margin: 0; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+    p { margin: 0.4rem 0; }
+    code { font-size: 0.85em; background: var(--surface-2); padding: 0.1em 0.35em; border-radius: 4px; }
+    .muted { color: var(--muted); }
+
+    /* ── Header ─────────────────────────────────────────────────────────────── */
+    .topbar {
+      position: sticky; top: 0; z-index: 10;
+      background: color-mix(in srgb, var(--surface) 88%, transparent);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border);
+    }
+    .topbar-inner {
+      max-width: 70rem; min-height: 4rem; margin: 0 auto; padding: 1rem;
+      display: flex; align-items: center; gap: 0.85rem;
+    }
+    .brand { display: flex; align-items: center; gap: 0.55rem; }
+    .brand-mark {
+      width: 1.35rem; height: 1.35rem; border-radius: 6px;
+      background: conic-gradient(from 210deg, #e05a5a, #e0a63a, #3fb96a, #37b6c4, #7a6cf0, #e05a5a);
+      box-shadow: inset 0 0 0 3px var(--surface);
+    }
+    .brand h1 { white-space: nowrap; }
+    .conn {
+      display: inline-flex; align-items: center; gap: 0.45rem;
+      padding: 0.25rem 0.7rem; border-radius: 999px;
+      background: var(--surface-2); border: 1px solid var(--border);
+      font-size: 0.8rem; color: var(--muted);
+    }
+    .conn .dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--muted); }
+    .conn.is-on { color: var(--fg); }
+    .conn.is-on .dot { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+    .topbar-inner .spacer { flex: 1; }
+
+    /* ── Layout ─────────────────────────────────────────────────────────────── */
+    .wrap { max-width: 70rem; margin: 0 auto; padding: 1.5rem 1rem; display: grid; gap: 1.25rem; }
+    .row { display: grid; gap: 1rem; }
+    .row.cols-2 { grid-template-columns: minmax(0, 1fr); }
+    @media (max-width: 560px) {
+      .topbar-inner { min-height: 3.6rem; padding: 1rem; gap: 0.55rem; }
+      .brand h1 { font-size: 1.1rem; }
+      .brand-detail, .theme-label { display: none; }
+      .conn { padding: 0.35rem; }
+      .topbar button { padding-inline: 0.7rem; }
+      .wrap { padding: 1rem; gap: 1rem; }
+    }
+
+    /* ── Connection overview ───────────────────────────────────────────────── */
+    .connection-overview {
+      padding: 0.25rem 0;
+    }
+    .connection-overview h2 {
+      margin: 0; color: var(--fg); font-size: 1.15rem; font-weight: 650;
+      text-transform: none; letter-spacing: 0;
+    }
+    .connection-overview .help { margin: 0.35rem 0 0; width: 100%; color: var(--muted); }
+    .connection-attempt-status {
+      width: fit-content; max-width: 100%; margin: 0.65rem 0 0; padding: 0.5rem 0.65rem;
+      display: inline-flex; align-items: center; gap: 0.5rem; border: 1px solid var(--border);
+      border-radius: 7px; background: var(--surface-2); color: var(--muted); font-size: 0.84rem;
+    }
+    .connection-attempt-status.is-warn {
+      color: var(--warn); border-color: color-mix(in srgb, var(--warn) 42%, var(--border));
+      background: color-mix(in srgb, var(--warn) 8%, var(--surface));
+    }
+    .connection-attempt-status.is-error {
+      color: var(--err); border-color: color-mix(in srgb, var(--err) 42%, var(--border));
+      background: color-mix(in srgb, var(--err) 8%, var(--surface));
+    }
+    .connection-attempt-status.is-busy::before {
+      content: ""; flex: 0 0 auto; width: 0.75rem; height: 0.75rem;
+      border: 2px solid color-mix(in srgb, currentColor 28%, transparent);
+      border-top-color: currentColor; border-radius: 50%; animation: status-spin 750ms linear infinite;
+    }
+
+    /* ── Cards ──────────────────────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      container-type: inline-size;
+    }
+    .card.category-setup { --card-accent: #4d8fe8; }
+    .card.category-control { --card-accent: #37b6c4; }
+    .card.category-visual { --card-accent: #8d78e8; }
+    .card.category-performance { --card-accent: #e8b93f; }
+    .card.category-support { --card-accent: #7d8797; }
+    .card[class*="category-"] > header {
+      background: color-mix(in srgb, var(--card-accent) 7%, var(--surface-2));
+      box-shadow: inset 3px 0 var(--card-accent);
+    }
+    .card > header {
+      display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content;
+      grid-template-areas: "title message actions"; align-items: center; gap: 0.75rem;
+      min-height: 2.75rem; padding: 0.4rem 0.4rem 0.4rem 1rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface-2);
+    }
+    .card > header h2 { grid-area: title; justify-self: start; min-width: 0; }
+    .card > header button { padding: 0.25rem 0.65rem; }
+    .card > .body { padding: 1rem; display: grid; gap: 0.75rem; }
+    .card > .body > p { margin: 0; }
+    .card > .body > p:empty,
+    .card > .body > div:empty { display: none; }
+    .tool-group-separator {
+      position: relative; height: 1rem; margin: -0.5rem 0.5rem;
+    }
+    .tool-group-separator::after {
+      content: ""; position: absolute; inset: 50% 0 auto; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--border) 8%, var(--border) 92%, transparent);
+    }
+    #toolsSection > .separator-control { order: 0; }
+    #toolsSection > .workflow-live { order: 1; }
+    #toolsSection > .workflow-identify { order: 2; }
+    #toolsSection > .workflow-color-order { order: 3; }
+    #toolsSection > .separator-visual { order: 4; }
+    #toolsSection > .workflow-patterns { order: 5; }
+    #toolsSection > #signal-integrity-test { order: 6; }
+    #toolsSection > .separator-performance { order: 7; }
+    #toolsSection > #led-data-path-stress-test { order: 8; }
+    #toolsSection > #serial-throughput-test { order: 9; }
+    #toolsSection > .separator-support { order: 10; }
+    #toolsSection > .workflow-power { order: 11; }
+    #toolsSection > .workflow-report { order: 12; }
+    .card.is-collapsed > header { border-bottom: 0; }
+    .card.is-collapsed > .body { display: none; }
+    .card > header .collapse-toggle {
+      display: grid; place-items: center; width: 2rem; min-width: 2rem; height: 2rem;
+      padding: 0; color: var(--fg); line-height: 1;
+    }
+    .card > header .collapse-toggle:hover { color: var(--fg); }
+    .card > header .collapse-toggle svg {
+      width: 1.15rem; height: 1.15rem; fill: none; stroke: currentColor; stroke-width: 2.25;
+      stroke-linecap: round; stroke-linejoin: round; transition: transform 140ms ease;
+    }
+    .card > header .collapse-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+    .device-header .conn {
+      min-width: 0; max-width: 24rem; padding: 0;
+      border: 0; background: transparent; color: var(--fg);
+    }
+    .device-header #connLabel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .card-header-message {
+      grid-area: message; justify-self: center; min-width: 0; max-width: 100%;
+      margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .card-header-message:empty { display: none; }
+    .card-header-message.is-busy {
+      display: inline-flex; align-items: center; gap: 0.45rem;
+    }
+    .card-header-message.is-busy::before {
+      content: ""; flex: 0 0 auto; width: 0.75rem; height: 0.75rem;
+      border: 2px solid color-mix(in srgb, currentColor 28%, transparent);
+      border-top-color: currentColor; border-radius: 50%;
+      animation: status-spin 750ms linear infinite;
+    }
+    @keyframes status-spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) {
+      .card-header-message.is-busy::before { animation-duration: 1.8s; }
+    }
+    .card-header-actions {
+      grid-area: actions; display: flex; align-items: center; justify-self: end;
+      flex-wrap: nowrap; gap: 0.4rem;
+    }
+    .signal-header-status { color: var(--muted); font-size: 0.8rem; }
+    @container (max-width: 42rem) {
+      .card > header { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "title actions"; }
+      .card > header:has(> .card-header-message:not(:empty):not([hidden])) {
+        grid-template-areas: "title actions" "message message"; row-gap: 0.3rem;
+      }
+      .card-header-message {
+        justify-self: stretch; max-width: none; padding: 0.1rem 0.6rem 0.2rem 0;
+        text-align: center; white-space: normal;
+      }
+    }
+
+    /* ── Controls ───────────────────────────────────────────────────────────── */
+    button {
+      font: inherit; font-weight: 550;
+      padding: 0.45rem 0.95rem;
+      border-radius: 7px;
+      border: 1px solid var(--control-border);
+      background: var(--surface-2);
+      color: var(--fg);
+      cursor: pointer;
+      transition: filter 120ms, background 120ms;
+    }
+    button:hover:not(:disabled) { filter: brightness(1.12); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    #connectToggle { padding: 0.5rem 0.7rem; }
+    #connectToggle.is-loading:disabled {
+      background: var(--surface-2);
+      border-color: var(--control-border);
+      color: var(--muted);
+      opacity: 1;
+      cursor: wait;
+    }
+    button.is-loading {
+      display: inline-flex; align-items: center; justify-content: center; gap: 0.45rem;
+    }
+    button.is-loading:disabled { opacity: 0.72; }
+    button.is-loading::before {
+      content: ""; flex: 0 0 auto; width: 0.75rem; height: 0.75rem;
+      border: 2px solid color-mix(in srgb, currentColor 30%, transparent);
+      border-top-color: currentColor; border-radius: 50%; animation: status-spin 750ms linear infinite;
+    }
+    button:focus-visible, select:focus-visible, input:focus-visible {
+      outline: 2px solid var(--accent); outline-offset: 1px;
+    }
+    button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+    button.danger  { color: var(--err); border-color: color-mix(in srgb, var(--err) 45%, var(--border)); }
+    button.ghost   { background: transparent; }
+
+    select, input[type="number"], input[type="text"], input[type="color"], textarea {
+      font: inherit;
+      padding: 0.4rem 0.55rem;
+      border-radius: 7px;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--fg);
+      min-width: 0;
+    }
+    select:disabled, input[type="number"]:disabled, input[type="text"]:disabled {
+      background: color-mix(in srgb, var(--surface) 72%, var(--bg));
+      border-color: color-mix(in srgb, var(--border) 70%, var(--bg));
+      color: var(--muted);
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    input[type="color"] { width: 100%; min-height: 2.35rem; padding: 0.2rem; cursor: pointer; }
+    input[type="range"] { width: 100%; accent-color: var(--accent); }
+    textarea { width: 100%; resize: vertical; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 0.78rem; line-height: 1.45; }
+
+    .field { display: grid; gap: 0.25rem; }
+    .field > span { font-size: 0.78rem; font-weight: 550; color: var(--muted); }
+    .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 0.75rem; }
+    .test-console-grid { display: grid; gap: 1rem; align-items: start; }
+    @media (min-width: 760px) {
+      .test-console-grid { grid-template-columns: 8rem max-content minmax(15rem, 1fr); }
+    }
+    .control-section {
+      min-width: 0;
+    }
+    .control-section-title {
+      display: block; margin-bottom: 0.65rem; color: var(--muted); font-size: 0.72rem;
+      font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em;
+    }
+    .control-section > select { width: 100%; }
+    .color-controls { display: grid; grid-template-columns: minmax(5rem, 6rem) minmax(0, 1fr); gap: 0.75rem; align-items: end; }
+    .color-controls #testWhiteField { grid-column: 1 / -1; }
+    .actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .actions .spacer { flex: 1; }
+    .value { color: var(--fg); font-variant-numeric: tabular-nums; }
+    .inline-feedback { margin: 0; font-size: 0.82rem; }
+    .inline-feedback.is-ok { color: var(--ok); }
+    .inline-feedback.is-error { color: var(--err); }
+    .card > header .inline-feedback {
+      opacity: 1; transition: opacity 400ms ease;
+    }
+    .card > header .inline-feedback.is-fading { opacity: 0; }
+
+    .choices { display: flex; gap: 1rem; align-items: center; }
+    .choices label { display: inline-flex; align-items: center; gap: 0.35rem; cursor: pointer; }
+    .scope-controls { flex-wrap: nowrap; gap: 0.4rem; }
+    .test-range-field { display: inline-flex; align-items: center; gap: 0.4rem; }
+    .test-range-field.is-disabled { opacity: 0.45; }
+    .range-bound { display: inline-flex; align-items: center; gap: 0.2rem; color: var(--muted); font-size: 0.75rem; }
+    .range-bound input { width: 3rem; padding-inline: 0.3rem; }
+    .test-color-field input { width: 6rem; }
+    .range-with-value { display: flex; align-items: center; gap: 0.55rem; min-height: 2.35rem; }
+    .range-with-value input { min-width: 0; }
+    .tool-control-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+      gap: 0.75rem; align-items: end;
+    }
+    .metric-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+      gap: 0.5rem; margin: 0;
+    }
+    .metric-grid > div { padding-left: 0.65rem; border-left: 2px solid var(--border); }
+    .metric-grid dt { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .metric-grid dd { margin: 0.1rem 0 0; font-weight: 650; font-variant-numeric: tabular-nums; }
+    .test-guidance { color: var(--muted); }
+
+    .warning {
+      padding: 0.55rem 0.9rem;
+      border-radius: var(--radius);
+      border: 1px solid color-mix(in srgb, var(--warn) 40%, var(--border));
+      background: color-mix(in srgb, var(--warn) 10%, var(--surface));
+      color: var(--warn);
+    }
+
+    /* ── Device info ────────────────────────────────────────────────────────── */
+    dl.specs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.75rem; margin: 0; }
+    dl.specs > div { min-width: 0; padding-right: 0.75rem; border-right: 1px solid var(--border); }
+    dl.specs > div:nth-child(4n) { border-right: 0; }
+    dl.specs dt { color: var(--muted); font-size: 0.85rem; }
+    dl.specs dd { margin: 0; font-weight: 550; font-variant-numeric: tabular-nums; }
+    @media (max-width: 700px) {
+      dl.specs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      dl.specs > div:nth-child(4n) { border-right: 1px solid var(--border); }
+      dl.specs > div:nth-child(2n) { border-right: 0; }
+    }
+    @media (max-width: 420px) {
+      dl.specs { grid-template-columns: minmax(0, 1fr); }
+      dl.specs > div { padding-right: 0; border-right: 0; }
+    }
+    .subsection-title { margin: 0.25rem 0 -0.25rem; color: var(--muted); font-size: 0.75rem; font-weight: 650; text-transform: uppercase; letter-spacing: 0.08em; }
+    .badges { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+    .badges span {
+      padding: 0.18rem 0.6rem; border-radius: 999px; font-size: 0.78rem; font-weight: 550;
+      border: 1px solid var(--border); background: var(--surface-2); color: var(--muted);
+    }
+    .badges span.cap-on { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); color: var(--accent); }
+
+    /* ── Channel configuration summary ──────────────────────────────────────── */
+    .channel-config-grid {
+      display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+      column-gap: 1.5rem; margin: 0; padding: 0; list-style: none;
+    }
+    .channel-config-grid li {
+      display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: center; column-gap: 0.65rem; padding: 0.45rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.8rem; font-variant-numeric: tabular-nums;
+    }
+    .channel-config-grid strong { color: var(--fg); }
+    .channel-config-grid span { min-width: 0; color: var(--muted); white-space: nowrap; }
+    .ch…29239 tokens truncated…=== 'custom';
+      byId('powerCustomField').hidden = !custom;
+      const milliampsPerComponent = Number(custom ? byId('powerCustomCurrent').value : profile);
+      const voltage = Number(byId('powerVoltage').value);
+      const brightness = Number(byId('powerBrightness').value) / 100;
+      byId('powerBrightnessValue').value = `${byId('powerBrightness').value}%`;
+
+      const channel = Number(byId('powerChannel').value);
+      const entries = channel === BROADCAST_CHANNEL
+        ? [...(client?.config ?? [])]
+        : (client?.config ?? []).filter((entry) => entry.channel === channel);
+      if (!entries.length || !Number.isFinite(milliampsPerComponent) || milliampsPerComponent <= 0 ||
+          !Number.isFinite(voltage) || voltage <= 0) {
+        for (const id of ['powerPixels', 'powerAmps', 'powerWatts', 'powerSupply']) byId(id).textContent = '—';
+        byId('powerNote').textContent = 'Enter valid strip specifications to calculate an estimate.';
+        return;
+      }
+
+      const pixels = entries.reduce((sum, entry) => sum + entry.ledCount, 0);
+      const componentLoads = entries.reduce(
+        (sum, entry) => sum + entry.ledCount * bytesPerLed(entry.colorOrder),
+        0,
+      );
+      const amps = componentLoads * milliampsPerComponent * brightness / 1000;
+      const watts = amps * voltage;
+      const supplyAmps = Math.ceil(amps * 1.25 * 2) / 2;
+      const supplyWatts = supplyAmps * voltage;
+
+      byId('powerPixels').textContent = pixels.toLocaleString();
+      byId('powerAmps').textContent = `${amps.toFixed(2)} A`;
+      byId('powerWatts').textContent = `${watts.toFixed(1)} W`;
+      byId('powerSupply').textContent = `${supplyAmps.toFixed(1)} A · ${supplyWatts.toFixed(0)} W`;
+      const hasRgbw = entries.some((entry) => isRgbw(entry.colorOrder));
+      byId('powerNote').textContent = `Suggested supply includes 25% headroom. Estimate excludes the controller, cable losses, and idle current${hasRgbw ? '; RGBW assumes all four components can be on together' : ''}.`;
+    }
+
+    for (const id of ['powerChannel', 'powerCurrentProfile', 'powerCustomCurrent', 'powerVoltage', 'powerBrightness']) {
+      byId(id).addEventListener('input', updatePowerEstimate);
+      byId(id).addEventListener('change', updatePowerEstimate);
+    }
+    updatePowerEstimate();
+
+    async function buildDiagnosticReport() {
+      const browserDetails = await browserDetailsPromise;
+      if (serialEnvironment?.transport) {
+        serialEnvironment = await readTransportEnvironment(serialEnvironment.transport);
+      }
+      const lines = [
+        'Opalinx WORKBENCH — DIAGNOSTIC REPORT',
+        `Generated: ${new Date().toISOString()}`,
+        '',
+        'DEVICE',
+        `Connection: ${client ? 'Connected' : 'Disconnected'}`,
+      ];
+
+      if (info) {
+        lines.push(
+          `Name: ${info.deviceName || '(unnamed)'}`,
+          `Protocol: v${info.protocol.major}.${info.protocol.minor}.${info.protocol.patch}`,
+          `Firmware: v${info.firmware.major}.${info.firmware.minor}.${info.firmware.patch}`,
+          `Hardware revision: ${formatRevision(info.hardwareRevision)}`,
+          `Hardware platform: ${info.hardwarePlatform}`,
+          `Transport: ${info.transport}`,
+          `Channels: ${info.channelCount}`,
+          `Maximum payload: ${info.maxPayloadLength} bytes`,
+          `Frames in flight: ${info.maxInFlightFrames}`,
+          `Maximum LEDs (RGB/RGBW): ${info.maxLedsRgb} / ${info.maxLedsRgbw}`,
+          `USB VID: ${hexId(serialEnvironment?.usb?.usbVendorId)}`,
+          `USB PID: ${hexId(serialEnvironment?.usb?.usbProductId)}`,
+          '',
+          'CAPABILITIES',
+          `RGBW: ${hasCapability(info.capabilities, Capability.RGBW) ? 'Yes' : 'No'}`,
+          `Per-channel configuration: ${hasCapability(info.capabilities, Capability.PER_CHANNEL_CONFIG) ? 'Yes' : 'No'}`,
+          `Per-channel Show: ${hasCapability(info.capabilities, Capability.PER_CHANNEL_SHOW) ? 'Yes' : 'No'}`,
+        );
+      }
+
+      lines.push('', 'CHANNEL CONFIGURATION');
+      const config = client?.config ?? [];
+      if (config.length) {
+        for (const entry of config) {
+          const speedName = Object.keys(PROTOCOLS).find((key) => PROTOCOLS[key] === entry.protocolValue);
+          lines.push(`Channel ${entry.channel}: ${entry.colorOrder}, ${speedName || `0x${entry.protocolValue.toString(16).padStart(2, '0')}`}, ${entry.ledCount} pixels`);
+        }
+      } else {
+        lines.push('No channel configuration available.');
+      }
+
+      lines.push('', 'TEST RESULTS');
+      if (byId('stressMetrics').hidden) {
+        lines.push('LED refresh test: Not run');
+      } else {
+        lines.push(
+          `LED refresh test: ${byId('stressStatus').textContent.trim() || 'Result available'}`,
+          '  Acknowledgements: Every frame (physical completion)',
+          `  Frames: ${byId('stressFrames').textContent}`,
+          `  Errors: ${byId('stressErrors').textContent}`,
+          `  Frame rate: ${byId('stressFps').textContent}`,
+          `  Average latency: ${byId('stressAverage').textContent}`,
+          `  Data rate: ${byId('stressDataRate').textContent}`,
+          `  Transferred: ${byId('stressBytes').textContent}`,
+          `  Firmware pixel copy: ${byId('stressPixelCopy').textContent}`,
+          `  Output buffer copy: ${byId('stressOutputCopy').textContent}`,
+          `  Output submit: ${byId('stressOutputSubmit').textContent}`,
+          `  DMA / wire: ${byId('stressOutputDrain').textContent}`,
+          `  Firmware output total: ${byId('stressShow').textContent}`,
+          `  Bottleneck: ${byId('stressBottleneck').textContent}`,
+          `  Verification: ${byId('stressVerification').textContent}`,
+        );
+      }
+      if (byId('throughputMetrics').hidden) {
+        lines.push('Serial throughput test: Not run');
+      } else {
+        lines.push(
+          `Serial throughput test: ${byId('throughputStatus').textContent.trim() || 'Result available'}`,
+          `  Acknowledgements: ${lastThroughputResult?.acknowledgementInterval ? `Every ${lastThroughputResult.acknowledgementInterval} messages (automatic)` : 'Unavailable'}`,
+          `  Channel mode: ${byId('throughputMode').selectedOptions[0]?.text || 'Single channel'}`,
+          `  Payload: ${byId('throughputPayload').textContent}`,
+          `  Messages: ${byId('throughputMessages').textContent}`,
+          `  Errors: ${byId('throughputErrors').textContent}`,
+          `  Data rate: ${byId('throughputRate').textContent}`,
+          `  Transferred: ${byId('throughputBytes').textContent}`,
+          `  Elapsed: ${byId('throughputElapsed').textContent}`,
+          `  Firmware COBS decode: ${byId('throughputCobs').textContent}`,
+          `  Firmware CRC check: ${byId('throughputCrc').textContent}`,
+          `  Firmware pixel copy: ${byId('throughputPixelCopy').textContent}`,
+          `  Firmware request handling: ${byId('throughputFirmware').textContent}`,
+          `  Firmware processing total: ${byId('throughputProcessing').textContent}`,
+          `  UART received: ${byId('throughputUartBytes').textContent}`,
+          `  RX queue peak: ${byId('throughputRxPeak').textContent}`,
+          `  Parser overflows: ${byId('throughputOverflows').textContent}`,
+          `  Bottleneck: ${byId('throughputBottleneck').textContent}`,
+          `  Test context: ${byId('throughputContext').textContent}`,
+        );
+      }
+
+      lines.push(
+        '',
+        'SERIAL ENVIRONMENT',
+        `Opalinx transport: ${info?.transport ?? 'Unavailable'}`,
+        `USB VID/PID: ${hexId(serialEnvironment?.usb?.usbVendorId)} / ${hexId(serialEnvironment?.usb?.usbProductId)}`,
+        `Requested baud rate: ${serialEnvironment?.options?.baudRate ?? 'Unavailable'}`,
+        `Data bits: ${serialEnvironment?.options?.dataBits ?? 8}`,
+        `Stop bits: ${serialEnvironment?.options?.stopBits ?? 1}`,
+        `Parity: ${serialEnvironment?.options?.parity ?? 'none'}`,
+        `Flow control: ${serialEnvironment?.options?.flowControl ?? 'none'}`,
+        `Requested buffer size: ${serialEnvironment?.options?.bufferSize ?? 'Browser default'}`,
+        `Transport open: ${serialEnvironment?.streams?.open ? 'Yes' : 'No'}`,
+        `Readable stream available: ${serialEnvironment?.streams?.readable ? 'Yes' : 'No'}`,
+        `Writable stream available: ${serialEnvironment?.streams?.writable ? 'Yes' : 'No'}`,
+        `Clear to send (CTS): ${serialEnvironment?.signals ? (serialEnvironment.signals.clearToSend ? 'On' : 'Off') : 'Unavailable'}`,
+        `Data carrier detect (DCD): ${serialEnvironment?.signals ? (serialEnvironment.signals.dataCarrierDetect ? 'On' : 'Off') : 'Unavailable'}`,
+        `Data set ready (DSR): ${serialEnvironment?.signals ? (serialEnvironment.signals.dataSetReady ? 'On' : 'Off') : 'Unavailable'}`,
+        `Ring indicator: ${serialEnvironment?.signals ? (serialEnvironment.signals.ringIndicator ? 'On' : 'Off') : 'Unavailable'}`,
+        '',
+        'BROWSER ENVIRONMENT',
+        `Web Serial available: ${'serial' in navigator ? 'Yes' : 'No'}`,
+        `Secure context: ${window.isSecureContext ? 'Yes' : 'No'}`,
+        `Page protocol: ${location.protocol}`,
+        `Platform: ${browserDetails?.platform ?? navigator.userAgentData?.platform ?? navigator.platform ?? 'Unavailable'}`,
+        `Platform version: ${browserDetails?.platformVersion ?? 'Unavailable'}`,
+        `Architecture: ${browserDetails?.architecture ?? 'Unavailable'}`,
+        `Bitness: ${browserDetails?.bitness ?? 'Unavailable'}`,
+        `Mobile: ${navigator.userAgentData ? (navigator.userAgentData.mobile ? 'Yes' : 'No') : 'Unavailable'}`,
+        `Browser brands: ${browserDetails?.fullVersionList?.map(({ brand, version }) => `${brand} ${version}`).join(', ') || navigator.userAgentData?.brands?.map(({ brand, version }) => `${brand} ${version}`).join(', ') || 'Unavailable'}`,
+        `Language: ${navigator.language || 'Unavailable'}`,
+        `Logical processors: ${navigator.hardwareConcurrency ?? 'Unavailable'}`,
+        `Approximate device memory: ${navigator.deviceMemory ? `${navigator.deviceMemory} GiB` : 'Unavailable'}`,
+        `User agent: ${navigator.userAgent}`,
+        '',
+        'RECENT ACTIVITY (newest first)',
+      );
+      const activity = [...byId('activityLog').querySelectorAll('li:not(.empty)')].slice(0, 25);
+      if (!activity.length) {
+        lines.push('No activity recorded.');
+      } else {
+        for (const item of activity) {
+          const time = item.querySelector('time')?.textContent?.trim() || '--:--:--';
+          const level = item.querySelector('.log-level')?.textContent?.trim() || 'Info';
+          const message = item.querySelector('.log-message')?.textContent?.trim() || item.textContent.trim();
+          lines.push(`${time} [${level}] ${message}`);
+        }
+      }
+      return `${lines.join('\n')}\n`;
+    }
+
+    async function copyDiagnosticReport(text) {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+      const preview = byId('diagnosticReport');
+      preview.focus();
+      preview.select();
+      return document.execCommand('copy');
+    }
+
+    byId('copyDiagnosticReport').addEventListener('click', async () => {
+      const button = byId('copyDiagnosticReport');
+      const preview = byId('diagnosticReport');
+      button.disabled = true;
+      button.textContent = 'Copying…';
+      const report = await buildDiagnosticReport();
+      preview.value = report;
+      preview.hidden = false;
+      try {
+        const copied = await copyDiagnosticReport(report);
+        byId('diagnosticReportStatus').textContent = copied
+          ? 'Diagnostic report copied to the clipboard.'
+          : 'The report is ready; select the preview and copy it manually.';
+        addLog('info', 'Generated a diagnostic report.');
+      } catch (err) {
+        byId('diagnosticReportStatus').textContent = 'The report is ready; clipboard access was unavailable, so copy it from the preview.';
+      } finally {
+        button.disabled = false;
+        button.textContent = 'Copy Report';
+      }
+    });
+
+    // ---- Device reset ----
+    const resetDialog = byId('resetDialog');
+    byId('openReset').addEventListener('click', () => resetDialog.showModal());
+    byId('cancelReset').addEventListener('click', () => resetDialog.close());
+    byId('confirmReset').addEventListener('click', async () => {
+      const button = byId('confirmReset');
+      button.disabled = true;
+      try {
+        await stopActiveLedTask({ blackoutAfter: false });
+        await client.reset({ timeout: 5000 });
+        await refreshConfig();
+        byId('identifyLegend').innerHTML = '';
+        byId('detectResult').textContent = '';
+        resetDialog.close();
+        setStatus('Device reset to its power-on state.', 'ok');
+        addLog('warn', 'Device reset completed; configuration and LED buffers returned to power-on defaults.');
+      } catch (err) {
+        resetDialog.close();
+        reportError('Device reset failed', err);
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+    // ---- Guided color order setup ----
+    let colorResolver = null;
+    byId('detectButtons').addEventListener('click', (e) => {
+      const color = e.target.dataset?.color;
+      if (color && colorResolver) { const r = colorResolver; colorResolver = null; r(color); }
+    });
+    const askColor = (text) => {
+      byId('detectPrompt').textContent = text;
+      byId('detectButtons').hidden = false;
+      return new Promise((resolve) => { colorResolver = resolve; });
+    };
+
+    byId('detectStart').addEventListener('click', async () => {
+      const components = Number(document.querySelector('input[name="components"]:checked').value);
+      const identity = components === 4 ? 'RGBW' : 'RGB';
+      const seq = components === 4 ? ['r', 'g', 'b', 'w'] : ['r', 'g', 'b'];
+      const level = 64; // dim, to be gentle and limit current
+      byId('detectResult').textContent = '';
+      setLedOutputMode('none');
+
+      try {
+        // Configure identity order so each logical component maps straight to a wire byte.
+        await client.configure({
+          channel: BROADCAST_CHANNEL, colorOrder: identity, protocol: byId('cfgSpeed').value,
+          ledCount: Number(byId('cfgLeds').value),
+        });
+
+        const observed = [];
+        for (let step = 0; step < seq.length; step++) {
+          const color = { r: 0, g: 0, b: 0 };
+          if (components === 4) color.w = 0;
+          color[seq[step]] = level;
+          // Confirm both operations independently. SHOW_ACK proves that Show completed; it does not
+          // retroactively acknowledge a preceding TxID-0 Fill that may have been rejected.
+          await client.fillChannel(BROADCAST_CHANNEL, color, { ack: true });
+          await client.show(BROADCAST_CHANNEL, { waitForDisplay: true });
+
+          const answer = await askColor(`Step ${step + 1}/${seq.length}: which color is lit?`);
+          if (answer === '?') {
+            byId('detectResult').textContent = 'Inconclusive — no clear color reported. Try again with a connected strip.';
+            byId('detectButtons').hidden = true;
+            byId('detectPrompt').textContent = '';
+            await blackout();
+            return;
+          }
+          observed.push(answer);
+        }
+
+        byId('detectButtons').hidden = true;
+        byId('detectPrompt').textContent = '';
+        await blackout();
+
+        const detected = observed.join('');
+        if (COLOR_ORDERS.includes(detected)) {
+          byId('detectResult').innerHTML =
+            `Detected color order: <strong>${detected}</strong> ` +
+            `<button id="applyDetected" class="primary">Apply</button>`;
+          byId('applyDetected').addEventListener('click', async () => {
+            try {
+              byId('cfgOrder').value = detected;
+              await client.configure({
+                channel: BROADCAST_CHANNEL, colorOrder: detected, protocol: byId('cfgSpeed').value,
+                ledCount: Number(byId('cfgLeds').value),
+              });
+              await refreshConfig();
+              setStatus(`Applied detected color order ${detected}.`, 'ok');
+              addLog('ok', `Detected and applied ${detected} color order.`);
+            } catch (err) { reportError('Apply detected color order failed', err); }
+          });
+        } else {
+          byId('detectResult').textContent =
+            `Observed sequence "${detected}" is not a known order — check for duplicate answers.`;
+        }
+      } catch (err) {
+        reportError('Color order setup failed', err);
+      }
+    });
+
+    // ---- Channel identification ----
+    async function blackout({ ack = true, queryConfig = true } = {}) {
+      const config = client?.config ?? (queryConfig ? await client.getConfig() : null);
+      if (!client || !config?.length) return;
+      const allRgbw = config.every((entry) => isRgbw(entry.colorOrder));
+      const allRgb = config.every((entry) => !isRgbw(entry.colorOrder));
+      if (allRgbw || allRgb) {
+        await client.fillChannel(
+          BROADCAST_CHANNEL,
+          allRgbw ? { r: 0, g: 0, b: 0, w: 0 } : { r: 0, g: 0, b: 0 },
+          { ack },
+        );
+      } else {
+        for (const entry of config) {
+          const color = isRgbw(entry.colorOrder)
+            ? { r: 0, g: 0, b: 0, w: 0 } : { r: 0, g: 0, b: 0 };
+          await client.fillChannel(entry.channel, color, { ack });
+        }
+      }
+      await client.show(BROADCAST_CHANNEL, { waitForDisplay: ack });
+      setLedOutputMode('none');
+    }
+
+    // Page shutdown cannot await serial I/O, but fire-and-forget frames give the controller the
+    // best chance to blackout before the browser tears down the connection.
+    let shutdownBlackoutSent = false;
+    function blackoutOnShutdown() {
+      if (!client || shutdownBlackoutSent) return;
+      shutdownBlackoutSent = true;
+      if (activeLedTask) activeLedTask.cancelled = true;
+      void blackout({ ack: false, queryConfig: false }).catch(() => {});
+    }
+    window.addEventListener('beforeunload', blackoutOnShutdown);
+    window.addEventListener('pagehide', blackoutOnShutdown);
+    window.addEventListener('pageshow', () => { shutdownBlackoutSent = false; });
+
+    byId('identifyAll').addEventListener('click', async () => {
+      try {
+        await stopActiveLedTask({ blackoutAfter: false });
+        setLedOutputMode('none');
+        const config = await client.getConfig();
+        const identities = buildIdentities(config.length);
+        const legend = [];
+        for (let c = 0; c < config.length; c++) {
+          const identity = identities[c];
+          const components = bytesPerLed(config[c].colorOrder);
+          const logical = identityBuffer(identity, config[c].ledCount, components);
+          const wire = reorderToWire(logical, config[c].colorOrder);
+          // Acknowledged so a rejected per-channel write throws here (this one-shot has no later
+          // frame to surface a fire-and-forget failure — it would otherwise report false success).
+          await client.setPixels(c, config[c].ledCount, wire, { ack: true });
+          legend.push(legendItem(c, identity));
+        }
+        await client.show(BROADCAST_CHANNEL, { waitForDisplay: true }); // broadcast commit, confirm display
+        byId('identifyLegend').innerHTML = legend.join('');
+        setStatus('All channels lit with distinct identities.', 'ok');
+        addLog('ok', `Applied distinct identities to ${config.length} channels.`);
+      } catch (err) {
+        reportError('Channel identification failed', err);
+      }
+    });
+
+    byId('blackout').addEventListener('click', async () => {
+      try {
+        await stopActiveLedTask();
+        byId('identifyLegend').innerHTML = '';
+        setStatus('Blacked out.', 'ok');
+        addLog('ok', 'Blacked out all channels.');
+      }
+      catch (err) { reportError('Blackout failed', err); }
+    });
+  </script>
+</body>
+</html>
+

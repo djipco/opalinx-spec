@@ -5,7 +5,6 @@ import { marked } from 'marked';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const output = path.join(root, 'dist');
-const workbench = path.resolve(process.env.WORKBENCH_DIR || path.join(root, '..', 'opalinx-workbench'));
 
 function slugify(value) {
   return value
@@ -106,10 +105,8 @@ async function build() {
 
   const workbenchOutput = path.join(output, 'workbench');
   await mkdir(path.join(workbenchOutput, 'node_modules'), { recursive: true });
-  await cp(path.join(workbench, 'index.html'), path.join(workbenchOutput, 'index.html'));
-  await cp(path.join(workbench, 'desktop-window-state.js'), path.join(workbenchOutput, 'desktop-window-state.js'));
-  await cp(path.join(workbench, 'node_modules', 'opalinx'), path.join(workbenchOutput, 'node_modules', 'opalinx'), { recursive: true });
-  await cp(path.join(workbench, 'node_modules', 'djipevents'), path.join(workbenchOutput, 'node_modules', 'djipevents'), { recursive: true });
+  await cp(path.join(root, 'node_modules', 'opalinx'), path.join(workbenchOutput, 'node_modules', 'opalinx'), { recursive: true });
+  await cp(path.join(root, 'node_modules', 'djipevents'), path.join(workbenchOutput, 'node_modules', 'djipevents'), { recursive: true });
 
   await writeFile(path.join(output, '.nojekyll'), '');
   console.log(`Built Opalinx site in ${output}`);
