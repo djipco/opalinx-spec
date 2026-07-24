@@ -8,7 +8,7 @@
   },
   "dependencies": {
     "djipevents": "^2.0.7",
-    "opalinx": "1.0.0-alpha.17"
+    "opalinx": "1.0.0-alpha.18"
   },
   "devDependencies": {
     "marked": "^16.4.2"
