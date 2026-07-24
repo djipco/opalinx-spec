@@ -987,7 +987,9 @@ See [`LICENSE.md`](LICENSE.md) for the full legal text.
 
 The name "**Opalinx**" refers exclusively to the protocol defined by the canonical specification.
 
-Modified, extended, or incompatible protocols must not be described as **Opalinx** or
+Implementations that conform to this specification may be described as **Opalinx**-compatible,
+including when they use the extension mechanisms defined by this specification. A protocol that
+changes or conflicts with the core **Opalinx** requirements must not be described as **Opalinx** or
 **Opalinx**-compatible.
 
 The name "**Opalinx**" may only be used to refer to implementations or documents that conform to the
