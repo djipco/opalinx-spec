@@ -38,3 +38,14 @@ already-specified behavior, but they must be reviewed against every maintained
 implementation. CI consumers should pin an exact `opalinx-spec` commit.
 
 The `schema.json` file defines the corpus format. It uses JSON Schema draft 2020-12.
+
+## Certification badges
+
+Official badges distinguish device conformance from host conformance and identify the applicable
+protocol version. Passing the public conformance corpus does not by itself grant certification or
+permission to use a badge. The badges are reserved Opalinx certification marks and may be used only
+with written permission under a valid commercial licence.
+
+| Device | Host |
+|--------|------|
+| [![Opalinx Certified Device 1.0](../site/assets/badges/opalinx-certified-device-1.0.svg)](../site/assets/badges/opalinx-certified-device-1.0.svg) | [![Opalinx Certified Host 1.0](../site/assets/badges/opalinx-certified-host-1.0.svg)](../site/assets/badges/opalinx-certified-host-1.0.svg) |

@@ -70,6 +70,9 @@ async function renderPage(source, destination, options) {
       .replace('(conformance/README.md)', '(../conformance/)')
       .replaceAll('(LICENSE.md', '(../license/');
   }
+  if (source === 'conformance/README.md') {
+    markdown = markdown.replaceAll('../site/assets/', '../assets/');
+  }
   let body = addHeadingIds(marked.parse(markdown, { gfm: true }))
     .replace(/<blockquote>\s*<p>\[!WARNING\]\s*/g, '<blockquote class="warning">\n<p>');
   const headings = [...body.matchAll(/<h2 id="([^"]+)">([\s\S]*?)<\/h2>/g)];
