@@ -407,6 +407,54 @@
           }
         }
       ]
+    },
+    {
+      "name": "reset_during_active_show_cancels_pending_show",
+      "initial_state": {
+        "channel_capacities": [2],
+        "channels": [
+          { "color_order": 0, "protocol": 0, "led_count": 2, "pixels_hex": "000000000000" }
+        ]
+      },
+      "steps": [
+        {
+          "input": { "tx_id": 0, "identifier": 65, "payload_hex": "ff010203" },
+          "expect": { "responses": [] }
+        },
+        {
+          "input": { "tx_id": 16385, "identifier": 80, "payload_hex": "ff" },
+          "expect": { "responses": [] }
+        },
+        {
+          "input": { "tx_id": 0, "identifier": 65, "payload_hex": "ff040506" },
+          "expect": { "responses": [] }
+        },
+        {
+          "input": { "tx_id": 16386, "identifier": 80, "payload_hex": "ff" },
+          "expect": { "responses": [] }
+        },
+        {
+          "input": { "tx_id": 16387, "identifier": 81, "payload_hex": "" },
+          "expect": { "responses": [] }
+        },
+        {
+          "input": { "event": "active_show_completed" },
+          "expect": {
+            "responses": [
+              { "tx_id": 16385, "identifier": 208, "payload_hex": "" }
+            ],
+            "displayed_channels_hex": ["010203010203"]
+          }
+        },
+        {
+          "input": { "event": "reset_output_completed" },
+          "expect": {
+            "responses": [
+              { "tx_id": 16387, "identifier": 209, "payload_hex": "" }
+            ]
+          }
+        }
+      ]
     }
   ]
 }

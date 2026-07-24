@@ -26,10 +26,12 @@ structure that framing alone cannot validate, with any required session context 
 
 `device_cases` are implementation-independent scripts for device conformance. An initial state
 declares channel capacities, configurations, and staged pixels. Each step supplies either a decoded
-request message or the observable completion of the active Show, then lists the responses and/or
-physical channel output that must result. An omitted response or output assertion means that the
-step does not observe that category. The harness chooses how to establish the declared initial state
-and detect completed physical output; neither mechanism is part of the protocol.
+request message or an observable physical-output completion event, then lists the responses and/or
+physical channel output that must result. `active_show_completed` completes the active Show;
+`reset_output_completed` completes the all-zero transmission performed by Reset. An omitted response
+or output assertion means that the step does not observe that category. The harness chooses how to
+establish the declared initial state and detect completed physical output; neither mechanism is part
+of the protocol.
 
 Changes to existing vectors are protocol changes. Additive vectors may clarify
 already-specified behavior, but they must be reviewed against every maintained

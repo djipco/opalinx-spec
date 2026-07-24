@@ -541,7 +541,8 @@ validation. Rejection does not change pipeline or pixel state.
 |---------|--------|----------|------------------|
 | `Set Pixels`, `Fill Channel` | Accept | Accept for the next frame | `ERR_BUSY` |
 | `Show` | Start and enter `ACTIVE` | Capture as pending and enter `ACTIVE_PENDING` | `ERR_BUSY` |
-| `Configure Device`, `Reset` | Accept | `ERR_BUSY` | `ERR_BUSY` |
+| `Configure Device` | Accept | `ERR_BUSY` | `ERR_BUSY` |
+| `Reset` | Accept | Accept; run after active Show | Accept; cancel pending Show and run after active Show |
 | Query requests | Accept | Accept | Accept |
 
 A vendor request MUST NOT violate core Opalinx state or pipelining guarantees. If it accesses state
@@ -570,6 +571,11 @@ clears all channel buffers to zero, and outputs zeros to the physical LEDs.
 **Response**: With a nonzero transaction ID, [`RESET_ACK`](#reset_ack-0xd1) after LED transmission
 completes, or [`ERROR`](#error-0xe0) on failure. A Reset carrying transaction ID zero produces no
 response.
+
+Reset MUST be accepted while a Show is actively transmitting. The active Show is allowed to
+complete, including its reset/latch interval, before Reset begins. If a pending Show has not started,
+Reset MUST cancel it and discard its acknowledgement. The device then restores its defaults and
+transmits the resulting all-zero output before completing Reset.
 
 After accepting a Reset, the device MUST complete it before processing any subsequent request. If
 the Reset has a nonzero transaction ID, `RESET_ACK` is therefore emitted before any response to a
@@ -927,10 +933,10 @@ An implementation is considered **Opalinx** 1.0 conformant if it:
 - Responds to `Configure Device` with a `CONFIG` response on success or an appropriate `ERROR`
   response on failure; on success, clears the pixel buffer of every affected channel to all-zeros
   atomically (for broadcast, either all channels are updated or none).
-- Responds to `Reset` with a `RESET_ACK` response after LED transmission completes, and rejects a
-  `Reset` received during active transmission with `ERR_BUSY`; an accepted Reset completes before
-  any subsequent request is processed, and `RESET_ACK` is emitted only after every response required
-  for an earlier request has been emitted.
+- Accepts `Reset` during active Show transmission, allows the active Show to complete, cancels any
+  pending Show, and transmits the reset all-zero output; an accepted Reset completes before any
+  subsequent request is processed, and `RESET_ACK` is emitted only after every response still
+  required for an earlier request has been emitted and the reset transmission has completed.
 - Implements the one-Show backlog, admission, frame-protection, completion, and acknowledgement
   guarantees defined in [Frame Pipelining](#frame-pipelining).
 - Sends `SET_PIXELS_ACK`, `FILL_CHANNEL_ACK`, and `SHOW_ACK` responses for pixel and show
