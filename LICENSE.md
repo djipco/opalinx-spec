@@ -23,6 +23,10 @@ Noncommercial purposes include personal projects, education, academic or public-
 evaluation, and testing without an intended commercial application. A business may evaluate and test
 Opalinx internally, but production use supporting commercial activity is not noncommercial use.
 
+Creating or publishing reviews, tutorials, commentary, news, or other editorial content about
+Opalinx is permitted even when that content is monetized. This permission does not allow distribution
+of the Materials beyond what this licence otherwise permits or imply certification or endorsement.
+
 ## 3. Commercial use
 
 Commercial use requires a separate written commercial licence. Commercial use includes using the

@@ -97,8 +97,8 @@ async function build() {
     active: 'conformance',
   });
   await renderPage('LICENSE.md', 'license', {
-    title: 'License',
-    description: 'License terms for the Opalinx specification.',
+    title: 'Licence',
+    description: 'Licence terms for the Opalinx specification.',
   });
   await cp(path.join(root, 'conformance', 'vectors.json'), path.join(output, 'conformance', 'vectors.json'));
   await cp(path.join(root, 'conformance', 'schema.json'), path.join(output, 'conformance', 'schema.json'));

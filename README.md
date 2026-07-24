@@ -1010,7 +1010,7 @@ Proposed changes, clarifications, and extensions may be debated in
 by the official **Opalinx** repository are considered authoritative.
 
 
-## License
+## Licence
 
 The specification, conformance materials, software, and Opalinx marks are governed by the
 [Opalinx Noncommercial Licence 1.0](LICENSE.md). Noncommercial use is free. Commercial products and
