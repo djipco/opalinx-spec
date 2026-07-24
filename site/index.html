@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="description" content="Opalinx is a lightweight binary protocol for addressable LED controllers." />
-  <title>Opalinx — Addressable LED control, clearly defined</title>
+  <title>Opalinx — Protocol specification</title>
   <link rel="icon" href="./assets/opalinx-mark.svg" />
   <link rel="stylesheet" href="./assets/site.css" />
   <script src="./assets/site.js" defer></script>
@@ -27,9 +27,9 @@
 
   <main>
     <section class="hero">
-      <p class="eyebrow">Addressable LED control protocol</p>
-      <h1>Move pixels.<br />Not complexity.</h1>
-      <p class="hero-copy">Opalinx is a compact, implementation-independent binary protocol connecting software to reliable, high-performance LED controllers.</p>
+      <p class="eyebrow">Protocol specification</p>
+      <h1>An open protocol for addressable LED controllers</h1>
+      <p class="hero-copy">Opalinx defines implementation-independent messages for communication between host software and addressable LED controllers over reliable byte streams.</p>
       <div class="actions">
         <a class="button primary" href="./spec/">Read the specification</a>
         <a class="button secondary" href="./workbench/">Open Workbench</a>
@@ -38,23 +38,23 @@
 
     <section class="section" aria-labelledby="foundation-title">
       <div class="section-heading">
-        <h2 id="foundation-title">A small, firm foundation.</h2>
-        <p class="section-lede">The core does the necessary work—framing, discovery, configuration, pixel transfer, coordinated output, and recovery—without prescribing firmware architecture.</p>
+        <h2 id="foundation-title">Protocol scope</h2>
+        <p class="section-lede">The core specifies framing, device information, configuration, pixel transfer, coordinated output, and recovery without prescribing a software or firmware architecture.</p>
       </div>
       <div class="grid">
-        <article class="card"><span class="card-number">01</span><h3>Clear wire contract</h3><p>COBS framing, CRC protection, deterministic errors, and transaction correlation over reliable byte streams.</p></article>
-        <article class="card"><span class="card-number">02</span><h3>Frame-coherent output</h3><p>Buffered RGB and RGBW data with coordinated multi-channel Show operations and a deliberately small pipeline.</p></article>
-        <article class="card"><span class="card-number">03</span><h3>Room to expand</h3><p>Stable information records and namespaced vendor extensions preserve space without burdening the baseline.</p></article>
+        <article class="card"><span class="card-number">01</span><h3>Framing and validation</h3><p>COBS framing, CRC protection, defined errors, and transaction correlation over reliable byte streams.</p></article>
+        <article class="card"><span class="card-number">02</span><h3>LED data and output</h3><p>RGB and RGBW pixel data, channel configuration, and coordinated multi-channel Show operations.</p></article>
+        <article class="card"><span class="card-number">03</span><h3>Extension points</h3><p>Information records and namespaced vendor messages allow additive extensions to the core protocol.</p></article>
       </div>
     </section>
 
     <section class="section">
       <div class="workbench-band">
         <div>
-          <p class="eyebrow">Runs in your browser</p>
-          <h2>Configure. Test. Diagnose.</h2>
-          <p>Opalinx Workbench connects directly to compatible USB controllers through Web Serial. No installation is required in supported Chromium browsers.</p>
-          <div class="actions"><a class="button primary" href="./workbench/">Launch Workbench</a></div>
+          <p class="eyebrow">Reference tool</p>
+          <h2>Opalinx Workbench</h2>
+          <p>The Workbench connects to compatible USB controllers through Web Serial for device inspection, configuration, and protocol testing. It requires a browser with Web Serial support.</p>
+          <div class="actions"><a class="button primary" href="./workbench/">Open Workbench</a></div>
         </div>
         <div class="terminal" aria-label="Example Opalinx session">
           <div><span class="prompt">→</span> Request device information</div>
@@ -68,7 +68,7 @@
     </section>
 
     <section class="section" aria-labelledby="ecosystem-title">
-      <div class="section-heading"><h2 id="ecosystem-title">Use it from your stack.</h2><p class="section-lede">Canonical clients share the same wire corpus and protocol semantics.</p></div>
+      <div class="section-heading"><h2 id="ecosystem-title">Client libraries</h2><p class="section-lede">Available libraries implement the same protocol semantics and are tested against the shared conformance corpus.</p></div>
       <div class="grid">
         <article class="card"><span class="card-number">JS</span><h3>JavaScript</h3><p>Browser Web Serial and Node.js transports with TypeScript declarations.</p><a class="card-link" href="https://github.com/djipco/opalinx-js">View opalinx-js →</a></article>
         <article class="card"><span class="card-number">PY</span><h3>Python</h3><p>A compact sans-I/O client suitable for Python applications and integrations.</p><a class="card-link" href="https://github.com/djipco/opalinx-python">View opalinx-python →</a></article>
