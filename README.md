@@ -104,9 +104,17 @@ and terminated with a single `0x00` delimiter byte. The encoded frame is guarant
 
 ### Frame Size
 
-The protocol supports a maximum payload length of 65535 bytes (16-bit unsigned integer). A host MUST
-accept any response payload up to that maximum. Every device MUST accept at least 9 request payload
-bytes, enough for one RGBW `Set Pixels` operation (`5` addressing bytes + `4` component bytes).
+The 16-bit payload-length field can represent payloads from 0 to 65535 bytes. Every device MUST
+accept at least 9 request payload bytes, enough for one RGBW `Set Pixels` operation (`5` addressing
+bytes + `4` component bytes).
+
+A host MUST accept every core Opalinx 1.0 response whose payload satisfies the bound defined for
+that response. The largest is CONFIG at 1020 bytes. The core portion of INFO is at most 475 bytes:
+its 7-byte prefix plus one instance of every non-vendor Opalinx 1.0 information record at its maximum
+length. Unknown future information records, vendor-information records, and namespaced vendor
+responses are extensions to that core requirement. A host MUST accept the response sizes required
+by every extension or vendor contract it chooses to use; it MAY reject larger unsupported extension
+or vendor payloads without treating the core protocol version as incompatible.
 
 Each device advertises the largest request payload it accepts in the `max_payload_length` field of
 the `INFO` response. This is a wire limit, not a statement about storage or processing architecture.
@@ -121,8 +129,9 @@ For an endpoint required to accept payloads of at most `P` bytes, the maximum de
 
 This is the maximum COBS-encoded length of a `D`-byte frame. The complete transmitted frame may
 therefore occupy `E + 1` bytes including its `0x00` delimiter. A device uses its advertised
-`max_payload_length` as `P`; a host uses `65535`. At the protocol maximum, `D = 65542`, `E = 65801`,
-and the complete delimited frame is at most `65802` bytes.
+`max_payload_length` as `P`. A host uses the largest response payload it is required or configured
+to accept, which MUST be at least 1020. An endpoint supporting the full wire-format maximum uses
+`P = 65535`; then `D = 65542`, `E = 65801`, and the complete delimited frame is at most 65802 bytes.
 
 ### Receiver Framing and Recovery
 
