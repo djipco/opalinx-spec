@@ -355,6 +355,8 @@ response; a host MUST NOT send a color-order value it does not understand.
 The protocol value selects the signaling profile used by the device. Color order independently
 determines whether 24 or 32 component bits are transmitted per LED. Electrical timing conformance is
 determined by compatibility with the named LED family and is outside the Opalinx wire protocol.
+A device may use the same output waveform for multiple profiles if that waveform is compatible with
+each named LED family and signaling rate.
 
 Every conformant device MUST support `0x00`. Support for other assigned values is advertised by the
 `Supported signaling protocols` INFO record. A host MUST only request a protocol value that it
