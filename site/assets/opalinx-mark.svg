@@ -2,6 +2,6 @@
   <title id="title">Opalinx OX monogram</title>
   <g fill="currentColor">
     <path d="M319 90 A150 150 0 1 0 319 290 L285 260 A105 105 0 1 1 285 120 Z"/>
-    <path d="M300 112 H345 L379 154 L430 100 H490 L410 190 L490 280 H430 L379 226 L345 268 H300 L349 190 Z"/>
+    <path d="M339 110 L379 154 L430 100 H490 L410 190 L490 280 H430 L379 226 L339 270 L305 240 L349 190 L305 140 Z"/>
   </g>
 </svg>
