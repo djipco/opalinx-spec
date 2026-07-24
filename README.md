@@ -967,24 +967,11 @@ Proposed changes, clarifications, and extensions may be debated in
 by the official **Opalinx** repository are considered authoritative.
 
 
-## License Summary
+## License
 
-The Opalinx specification is publicly available. It may be read, quoted, referenced, and shared
-unmodified without charge. Noncommercial Opalinx implementations are also permitted without charge.
-
-A separate written commercial license is required to receive monetary compensation specifically for
-a device, firmware, software product, service, or paid integration that implements Opalinx or offers
-Opalinx compatibility as a material feature. Ordinary internal business use and unrelated paid work
-in which Opalinx is merely incidental are not Commercial Use.
-
-In short:
-
-- the specification is free to read and share without charge;
-- noncommercial implementations are permitted;
-- direct commercial exploitation of Opalinx requires a separate written license;
-- commercial terms, including any fees or royalties, are agreed separately.
-
-See [`LICENSE.md`](LICENSE.md) for the full legal text.
+This repository is licensed under the
+[PolyForm Noncommercial License 1.0.0](LICENSE.md). Commercial use requires a separate license;
+contact Jean-Philippe Cô at <jp@djip.co> for commercial licensing.
 
 
 ## Name Usage

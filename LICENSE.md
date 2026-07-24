@@ -1,83 +1,76 @@
-# Opalinx Public and Noncommercial License
+# PolyForm Noncommercial License 1.0.0
 
-Copyright © 2026 Jean-Philippe Cô. All rights reserved except as expressly granted below.
+<https://polyformproject.org/licenses/noncommercial/1.0.0>
 
-## Licensed Material
+Required Notice: Copyright © 2026 Jean-Philippe Cô.
 
-"Licensed Material" means the specification, software, documentation, or other material distributed
-with this license.
+## Acceptance
 
-This license makes the Licensed Material publicly available and permits free noncommercial use.
-Direct commercial exploitation of Opalinx requires a separate written license.
+In order to get any license under these terms, you must agree to them as both strict obligations and conditions to all your licenses.
 
-## Public access and sharing
+## Copyright License
 
-You may read, download, inspect, quote, and reference the Licensed Material without charge.
+The licensor grants you a copyright license for the software to do everything you might do with the software that would otherwise infringe the licensor's copyright in it for any permitted purpose.  However, you may only distribute the software according to [Distribution License](#distribution-license) and make changes or new works based on the software according to [Changes and New Works License](#changes-and-new-works-license).
 
-You may reproduce and redistribute the unmodified Licensed Material without charge, provided that
-you preserve its copyright notice, this license, its author attribution, and any link to the official
-Opalinx repository.
+## Distribution License
 
-Public package registries and their mirrors may host and redistribute unmodified copies of the
-Licensed Material without charge. Operating such a registry or mirror does not by itself constitute
-Commercial Use.
+The licensor grants you an additional copyright license to distribute copies of the software.  Your license to distribute covers distributing the software with changes and new works permitted by [Changes and New Works License](#changes-and-new-works-license).
 
-## Noncommercial permission
+## Notices
 
-You may use, implement, modify, and create derivative works from the Licensed Material for personal,
-educational, artistic, research, evaluation, and other noncommercial purposes. You may distribute
-those works without charge if they include this license and preserve attribution.
+You must ensure that anyone who gets a copy of any part of the software from you also gets a copy of these terms or the URL for them above, as well as copies of any plain-text lines beginning with `Required Notice:` that the licensor provided with the software.  For example:
 
-Unofficial explanations, translations, adaptations, and implementations must not claim to replace
-the official Opalinx specification. A modified protocol must not be described as Opalinx or
-Opalinx-compatible.
+> Required Notice: Copyright Yoyodyne, Inc. (http://example.com)
 
-## Commercial license required
+## Changes and New Works License
 
-A separate written commercial license from the copyright holder is required before undertaking
-Commercial Use of Opalinx.
+The licensor grants you an additional copyright license to make changes and new works based on the software for any permitted purpose.
 
-"Commercial Use" means selling, licensing, renting, subscribing to, or otherwise receiving monetary
-compensation specifically for:
+## Patent License
 
-- access to the Licensed Material or an adaptation of it;
-- hardware, firmware, software, or a service that implements Opalinx or offers Opalinx
-  compatibility as a material feature; or
-- work performed specifically to develop, integrate, or support an Opalinx implementation.
+The licensor grants you a patent license for the software that covers patent claims the licensor can license, or becomes able to license, that you would infringe by using the software.
 
-Commercial Use does not include ordinary internal business use of a lawfully obtained copy,
-unrelated paid activity in which Opalinx use is merely incidental, or donations and sponsorships
-that do not purchase access, functionality, support, or another benefit.
+## Noncommercial Purposes
 
-Commercial terms, including any fees or royalties, are granted separately in writing. This license
-does not itself grant commercial rights. Commercial-license inquiries may be sent to
-<jp@djip.co>.
+Any noncommercial purpose is a permitted purpose.
 
-## Name and official status
+## Personal Uses
 
-Conformant implementations may truthfully describe themselves as implementing or compatible with
-Opalinx. They must not imply endorsement, certification, sponsorship, partnership, or official
-status.
+Personal use for research, experiment, and testing for the benefit of public knowledge, personal study, private entertainment, hobby projects, amateur pursuits, or religious observance, without any anticipated commercial application, is use for a permitted purpose.
 
-The terms "Official Opalinx," "Opalinx Certified," and similar claims require separate written
-permission from the copyright holder.
+## Noncommercial Organizations
 
-## Third-party material
+Use by any charitable organization, educational institution, public research organization, public safety or health organization, environmental protection organization, or government institution is use for a permitted purpose regardless of the source of funding or obligations resulting from the funding.
 
-This license does not replace the license of any third-party material included with the Licensed
-Material. Third-party material remains subject to its own license.
+## Fair Use
 
-## No warranty
+You may have "fair use" rights for the software under the law. These terms do not limit them.
 
-THE LICENSED MATERIAL IS PROVIDED "AS IS," WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
-INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE,
-NON-INFRINGEMENT, ACCURACY, OR COMPLETENESS.
+## No Other Rights
 
-TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE AUTHOR AND COPYRIGHT HOLDER WILL NOT BE LIABLE FOR ANY
-CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM THE LICENSED MATERIAL OR ITS USE.
+These terms do not allow you to sublicense or transfer any of your licenses to anyone else, or prevent the licensor from granting licenses to anyone else.  These terms do not imply any other licenses.
 
-## Governing law
+## Patent Defense
 
-This license is governed by the laws of the Province of Quebec and the federal laws of Canada
-applicable there. If any provision is unenforceable, it will be limited or removed only to the
-minimum extent necessary, and the remaining provisions will continue in effect.
+If you make any written claim that the software infringes or contributes to infringement of any patent, your patent license for the software granted under these terms ends immediately. If your company makes such a claim, your patent license ends immediately for work on behalf of your company.
+
+## Violations
+
+The first time you are notified in writing that you have violated any of these terms, or done anything with the software not covered by your licenses, your licenses can nonetheless continue if you come into full compliance with these terms, and take practical steps to correct past violations, within 32 days of receiving notice.  Otherwise, all your licenses end immediately.
+
+## No Liability
+
+***As far as the law allows, the software comes as is, without any warranty or condition, and the licensor will not be liable to you for any damages arising out of these terms or the use or nature of the software, under any kind of legal claim.***
+
+## Definitions
+
+The **licensor** is the individual or entity offering these terms, and the **software** is the software the licensor makes available under these terms.
+
+**You** refers to the individual or entity agreeing to these terms.
+
+**Your company** is any legal entity, sole proprietorship, or other kind of organization that you work for, plus all organizations that have control over, are under the control of, or are under common control with that organization.  **Control** means ownership of substantially all the assets of an entity, or the power to direct its management and policies by vote, contract, or otherwise.  Control can be direct or indirect.
+
+**Your licenses** are all the licenses granted to you for the software under these terms.
+
+**Use** means anything you do with the software requiring one of your licenses.
+
