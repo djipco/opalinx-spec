@@ -76,6 +76,9 @@ following unencoded structure:
    counterpart. The high bit distinguishes request messages (host→device, `0x01`–`0x7F`) from
    response messages (device→host, `0x81`–`0xFF`).
 
+   An Opalinx 1.0 device MUST NOT send unsolicited frames; every device frame is a response to a
+   host request.
+
  - **Payload length**: A 16-bit unsigned integer, little-endian, specifying the length of the
    payload in bytes. This field is always present, even for messages with an empty payload.
 
@@ -817,6 +820,10 @@ affected channel's transmission and required reset/latch interval have completed
 | TRANSACTION ID | IDENTIFIER | PAYLOAD LENGTH | CHECKSUM |
 |----------------|------------|----------------|----------|
 | 2 bytes        | `0xD0`     | `0x00` `0x00`  | 2 bytes  |
+
+**Note:** Hosts should use response timeouts appropriate to the transport and device. A `SHOW_ACK`
+is sent only after physical output completes, so its latency depends on the configured LED counts,
+signaling protocols, and channel-output concurrency.
 
 ### RESET_ACK (`0xD1`)
 
