@@ -63,7 +63,10 @@ following unencoded structure:
    the host MUST end the session before reusing the transaction ID. Hosts that increment `TxID`
    sequentially MUST skip `0x0000` when wrapping, advancing from `0xFFFF` to an available nonzero
    value. Hosts using `TxID = 0x0000` accept that rejection and loss are silent; traffic requiring
-   confirmation or error reporting MUST use a nonzero transaction ID.
+   confirmation or error reporting MUST use a nonzero transaction ID. As an operational practice, a
+   host sending sustained traffic with `TxID = 0x0000` can periodically send a request with a nonzero
+   transaction ID and require its response to confirm that the session remains responsive. This does
+   not confirm delivery of earlier fire-and-forget requests.
 
  - **Identifier**: A single byte identifying the message. `0x00` and `0x80` are reserved and
    MUST NOT be used as message identifiers; `0x00` serves as the sentinel value for "unknown"
