@@ -81,6 +81,11 @@ img, svg { display: block; max-width: 100%; }
 .prose blockquote.warning { padding: 18px 22px; border: 1px solid #ded8ff; border-left: 4px solid var(--accent); border-radius: 10px; background: #f5f2ff; }
 .prose blockquote.warning p { margin: 0; color: var(--text); }
 .prose img { border-radius: 12px; }
+.badge-gallery { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 22px; margin-top: 28px; }
+.badge-gallery figure { min-width: 0; margin: 0; }
+.badge-gallery img { display: block; width: 100%; height: auto; aspect-ratio: 3 / 1; }
+.badge-gallery figcaption { margin-top: 8px; color: var(--muted); font-size: 13px; }
+@media (max-width: 720px) { .badge-gallery { grid-template-columns: 1fr; } }
 
 .site-footer { display: flex; justify-content: space-between; gap: 30px; max-width: 1180px; margin: 0 auto; padding: 38px 24px 56px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
 .site-footer p { margin: 0; }

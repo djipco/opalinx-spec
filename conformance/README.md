@@ -46,7 +46,21 @@ protocol version. Passing the public conformance corpus does not by itself grant
 permission to use a badge. The badges are reserved Opalinx certification marks and may be used only
 with written permission under a valid commercial licence.
 
-| Scope | White on black | Black on white |
-|-------|----------------|----------------|
-| Device | [![Opalinx Certified Device 1.0 — white on black](../site/assets/badges/opalinx-certified-device-1.0.svg)](../site/assets/badges/opalinx-certified-device-1.0.svg) | [![Opalinx Certified Device 1.0 — black on white](../site/assets/badges/opalinx-certified-device-1.0-black-on-white.svg)](../site/assets/badges/opalinx-certified-device-1.0-black-on-white.svg) |
-| Host | [![Opalinx Certified Host 1.0 — white on black](../site/assets/badges/opalinx-certified-host-1.0.svg)](../site/assets/badges/opalinx-certified-host-1.0.svg) | [![Opalinx Certified Host 1.0 — black on white](../site/assets/badges/opalinx-certified-host-1.0-black-on-white.svg)](../site/assets/badges/opalinx-certified-host-1.0-black-on-white.svg) |
+<div class="badge-gallery">
+  <figure>
+    <a href="../site/assets/badges/opalinx-certified-device-1.0.svg"><img src="../site/assets/badges/opalinx-certified-device-1.0.svg" alt="Opalinx Certified Device 1.0 — white on black" width="540" height="180"></a>
+    <figcaption>Device · White on black</figcaption>
+  </figure>
+  <figure>
+    <a href="../site/assets/badges/opalinx-certified-device-1.0-black-on-white.svg"><img src="../site/assets/badges/opalinx-certified-device-1.0-black-on-white.svg" alt="Opalinx Certified Device 1.0 — black on white" width="540" height="180"></a>
+    <figcaption>Device · Black on white</figcaption>
+  </figure>
+  <figure>
+    <a href="../site/assets/badges/opalinx-certified-host-1.0.svg"><img src="../site/assets/badges/opalinx-certified-host-1.0.svg" alt="Opalinx Certified Host 1.0 — white on black" width="540" height="180"></a>
+    <figcaption>Host · White on black</figcaption>
+  </figure>
+  <figure>
+    <a href="../site/assets/badges/opalinx-certified-host-1.0-black-on-white.svg"><img src="../site/assets/badges/opalinx-certified-host-1.0-black-on-white.svg" alt="Opalinx Certified Host 1.0 — black on white" width="540" height="180"></a>
+    <figcaption>Host · Black on white</figcaption>
+  </figure>
+</div>
