@@ -6,7 +6,7 @@
     <path d="M319 90 A150 150 0 1 0 319 290 L285 260 A105 105 0 1 1 285 120 Z"/>
     <path d="M339 110 L379 154 L430 100 H490 L410 190 L490 280 H430 L379 226 L339 270 L305 240 L349 190 L305 140 Z"/>
   </g>
-  <path d="M210 32V148" stroke="#fff" stroke-width="2"/>
+  <path d="M215.2 32V148" stroke="#fff" stroke-width="2"/>
   <g fill="#fff" font-family="Arial, Helvetica, sans-serif">
     <text x="242" y="84" font-size="36" font-weight="700" letter-spacing="3">OPALINX 1.0</text>
     <text x="242" y="123" font-size="25" font-weight="700" letter-spacing="2">CERTIFIED HOST</text>
