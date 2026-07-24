@@ -408,7 +408,2351 @@
     }
     .channel-config-grid strong { color: var(--fg); }
     .channel-config-grid span { min-width: 0; color: var(--muted); white-space: nowrap; }
-    .ch…29239 tokens truncated…=== 'custom';
+    .channel-config-grid span:nth-child(3) {
+      grid-column: 1 / -1; grid-row: 2; overflow: hidden; text-overflow: ellipsis;
+      font-size: 0.75rem;
+    }
+    .channel-config-grid span:nth-child(4) { grid-column: 3; grid-row: 1; }
+    .channel-config-grid .channel-order { color: var(--accent); font-weight: 650; }
+    .channel-config-title { margin-top: 0.25rem; }
+    @media (max-width: 880px) {
+      .channel-config-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 520px) {
+      .channel-config-grid { grid-template-columns: minmax(0, 1fr); }
+    }
+
+    /* ── Identify legend ────────────────────────────────────────────────────── */
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr)); gap: 0.45rem; }
+    .grid > div { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; }
+    .swatch {
+      display: inline-block; width: 1.05rem; height: 1.05rem; border-radius: 4px;
+      border: 1px solid #00000055; flex: none;
+    }
+
+    /* ── Diagnostics ───────────────────────────────────────────────────────── */
+    .health-result { min-height: 2.5rem; margin: 0; color: var(--muted); }
+    .card > header .health-result { min-height: 0; }
+    .health-result strong { color: var(--fg); }
+    .log-toolbar { display: flex; align-items: center; gap: 0.75rem; }
+    .log-toolbar .muted { flex: 1; }
+    .activity-log {
+      max-height: 18rem; overflow: auto; margin: 0; padding: 0; list-style: none;
+      border: 1px solid var(--border); border-radius: 8px; background: var(--bg);
+    }
+    .activity-log li {
+      display: grid; grid-template-columns: 4.5rem 4.25rem minmax(0, 1fr); gap: 0.65rem;
+      padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border); font-size: 0.82rem;
+    }
+    .activity-log li:last-child { border-bottom: 0; }
+    .activity-log time { color: var(--muted); font-variant-numeric: tabular-nums; }
+    .log-level { font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+    .log-info .log-level { color: var(--accent); }
+    .log-ok .log-level { color: var(--ok); }
+    .log-warn .log-level { color: var(--warn); }
+    .log-error .log-level { color: var(--err); }
+    .activity-log .empty { display: block; color: var(--muted); }
+    dialog {
+      width: min(29rem, calc(100% - 2rem)); padding: 0; color: var(--fg);
+      border: 1px solid var(--border); border-radius: var(--radius-lg);
+      background: var(--surface); box-shadow: 0 1rem 4rem #0009;
+    }
+    dialog::backdrop { background: #080a0dcc; backdrop-filter: blur(3px); }
+    dialog header { padding: 1rem 1.15rem; border-bottom: 1px solid var(--border); }
+    dialog header h2 { color: var(--fg); }
+    dialog .dialog-body { padding: 1rem 1.15rem; }
+    dialog .actions { padding: 0 1.15rem 1.15rem; justify-content: flex-end; }
+    @media (max-width: 560px) {
+      .activity-log li { grid-template-columns: 4.25rem minmax(0, 1fr); }
+      .activity-log .log-level { grid-column: 1; }
+      .activity-log .log-message { grid-column: 2; grid-row: 1 / span 2; }
+    }
+
+    [hidden] { display: none !important; }
+    .stack { display: grid; gap: 1rem; }
+    footer {
+      margin-top: 0.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center; gap: 0.75rem;
+      color: var(--muted); font-size: 0.82rem;
+    }
+    @media (max-width: 560px) {
+      footer { align-items: flex-start; flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"></div>
+        <h1>Opalinx <span class="brand-detail">Workbench</span></h1>
+      </div>
+      <div class="spacer"></div>
+      <button id="connectToggle" class="primary">Connect</button>
+      <button id="themeToggle" class="ghost" type="button" title="Toggle theme">Theme</button>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <p id="browserWarning" class="warning" role="alert" hidden>
+      This browser does not support Web Serial. Use a Chromium-based browser such as Chrome or Edge.
+    </p>
+    <p id="contextWarning" class="warning" role="alert" hidden>
+      Web Serial requires a secure context. Serve this page over <code>http://localhost</code> or HTTPS.
+    </p>
+    <script>
+      document.getElementById('browserWarning').hidden = 'serial' in navigator;
+      document.getElementById('contextWarning').hidden = window.isSecureContext;
+    </script>
+
+    <section class="connection-overview" aria-labelledby="connectionHeading">
+      <div>
+        <h2 id="connectionHeading">Connect and troubleshoot your LEDs</h2>
+        <p class="help">Connect your controller to inspect its configuration, verify channel wiring,
+          and identify color order. Close other apps using the serial port first.</p>
+        <p id="connectionAttemptStatus" class="connection-attempt-status" role="status" aria-live="polite" hidden></p>
+      </div>
+      <p id="status" class="sr-only" role="status" aria-live="polite">Not connected.</p>
+    </section>
+
+    <div class="row cols-2">
+      <!-- ── Device info ──────────────────────────────────────────────────── -->
+      <section id="infoSection" class="card category-setup" hidden>
+        <header class="device-header">
+          <h2>Device Information</h2>
+          <span id="connPill" class="conn is-on card-header-message" hidden><span class="dot"></span><span id="connLabel"></span></span>
+          <div class="card-header-actions">
+            <button id="openReset" class="danger" type="button">Reset Device…</button>
+          </div>
+        </header>
+        <div class="body">
+          <dl class="specs" id="infoList"></dl>
+          <h3 class="subsection-title">Capabilities</h3>
+          <div class="badges" id="capBadges"></div>
+        </div>
+      </section>
+
+      <!-- ── Configuration ────────────────────────────────────────────────── -->
+      <section id="configSection" class="card category-setup" hidden>
+        <header>
+          <h2>LED Configuration</h2>
+          <p id="configFeedback" class="inline-feedback card-header-message" role="status" aria-live="polite" hidden></p>
+        </header>
+        <div class="body">
+          <div class="fields">
+            <label class="field"><span>Channel</span><select id="cfgChannel"></select></label>
+            <label class="field"><span>Color order</span><select id="cfgOrder"></select></label>
+            <label class="field"><span>Protocol</span><select id="cfgSpeed"></select></label>
+            <label class="field"><span>LEDs per channel</span><input id="cfgLeds" type="number" min="1" value="60" /></label>
+          </div>
+          <h3 class="subsection-title channel-config-title">Channel configuration</h3>
+          <div id="configTable"></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ── Tools ──────────────────────────────────────────────────────────── -->
+    <section id="toolsSection" class="stack" hidden>
+      <div class="row cols-2 workflow-live">
+        <div class="card category-control">
+          <header>
+            <h2>Live LED Control</h2>
+            <button id="showLiveTest" class="ghost">Show</button>
+            <button id="testBlackout" class="danger">Blackout</button>
+          </header>
+          <div class="body">
+            <div class="test-console-grid">
+              <label class="control-section">
+                <span class="control-section-title">Channel</span>
+                <select id="testChannel"></select>
+              </label>
+              <div class="control-section">
+                <span class="control-section-title">LED scope</span>
+                <div class="choices scope-controls">
+                  <label><input type="radio" name="testScope" value="all" checked /> All</label>
+                  <label><input id="testScopeRange" type="radio" name="testScope" value="range" /> Range</label>
+                  <span class="test-range-field is-disabled">
+                    <label class="range-bound">First <input id="testRangeMin" type="number" min="1" value="1" disabled /></label>
+                    <label class="range-bound">Last <input id="testRangeMax" type="number" min="1" value="1" disabled /></label>
+                  </span>
+                </div>
+              </div>
+              <div class="control-section">
+                <span class="control-section-title">Color &amp; Brightness</span>
+                <div class="color-controls">
+                  <label class="field test-color-field"><span class="sr-only">Color</span>
+                    <input id="testColor" type="color" value="#37b6c4" aria-label="Color" /></label>
+                  <label class="field"><span class="sr-only">Brightness</span>
+                    <span class="range-with-value">
+                      <input id="testBrightness" type="range" min="1" max="100" value="25" aria-label="Brightness" />
+                      <output id="testBrightnessValue" class="value">25%</output>
+                    </span>
+                  </label>
+                  <label id="testWhiteField" class="field" hidden><span>White <output id="testWhiteValue" class="value">0</output></span>
+                    <input id="testWhite" type="range" min="0" max="255" value="0" /></label>
+                </div>
+              </div>
+            </div>
+            <p id="testHint" class="muted"></p>
+          </div>
+        </div>
+
+      </div>
+
+      <div id="signal-integrity-test" class="card category-visual">
+        <header class="signal-header">
+          <h2>LED Diagnostics</h2>
+          <p id="signalStatus" class="signal-header-status card-header-message" role="status" aria-live="polite"></p>
+          <div class="card-header-actions">
+            <button id="startSignalTest" class="ghost">Start Diagnostics</button>
+            <button id="stopSignalTest" class="danger" hidden>Stop</button>
+          </div>
+        </header>
+        <div class="body">
+          <div class="tool-control-grid">
+            <label class="field"><span>Channel</span><select id="signalChannel"></select></label>
+            <label class="field"><span>Test</span><select id="signalPattern">
+              <option value="walk">Walking pixel</option>
+              <option value="alternating">Alternating red and cyan</option>
+              <option value="primaries">RGB primary cycle</option>
+            </select></label>
+            <label class="field"><span>Step interval</span><select id="signalInterval">
+              <option value="100">Fast · 100 ms</option>
+              <option value="250" selected>Normal · 250 ms</option>
+              <option value="500">Slow · 500 ms</option>
+            </select></label>
+          </div>
+        </div>
+      </div>
+
+      <div class="card category-visual workflow-patterns">
+        <header>
+          <h2>Test Patterns</h2>
+          <p id="patternStatus" class="health-result card-header-message" role="status" aria-live="polite"></p>
+          <button id="showPattern" class="ghost">Show Pattern</button>
+          <button id="patternBlackout" class="danger">Blackout</button>
+        </header>
+        <div class="body">
+          <div class="tool-control-grid">
+            <label class="field"><span>Channel</span><select id="patternChannel"></select></label>
+            <label class="field"><span>Pattern</span><select id="patternType">
+              <option value="red">Solid red</option>
+              <option value="green">Solid green</option>
+              <option value="blue">Solid blue</option>
+              <option value="white">Solid white</option>
+              <option value="alternating">Alternating red and blue</option>
+              <option value="checker">Black and white checker</option>
+              <option value="gradient">RGB gradient</option>
+            </select></label>
+            <label class="field"><span>Brightness <output id="patternBrightnessValue" class="value">25%</output></span>
+              <input id="patternBrightness" type="range" min="1" max="50" value="25" /></label>
+          </div>
+        </div>
+      </div>
+
+      <div id="serial-throughput-test" class="card category-performance">
+        <header>
+          <h2>Serial Throughput Test</h2>
+          <p id="throughputStatus" class="health-result card-header-message" role="status" aria-live="polite"></p>
+          <button id="startThroughputTest" class="ghost">Start Throughput Test</button>
+          <button id="stopThroughputTest" class="danger" hidden>Stop</button>
+        </header>
+        <div class="body">
+          <p class="test-guidance">Measure Opalinx pixel-data throughput without updating the physical LEDs.</p>
+          <div class="tool-control-grid">
+            <label class="field"><span>Channels</span><select id="throughputChannelScope">
+              <option value="all" selected>All channels</option>
+              <option value="range">Range</option>
+            </select></label>
+            <label class="field"><span>First channel</span><input id="throughputChannelFirst" type="number" min="0" value="0" disabled /></label>
+            <label class="field"><span>Last channel</span><input id="throughputChannelLast" type="number" min="0" value="0" disabled /></label>
+            <label class="field"><span>All-channel mode</span><select id="throughputMode">
+              <option value="broadcast">Broadcast · identical data</option>
+              <option value="independent" selected>Independent channel data</option>
+            </select></label>
+          </div>
+          <dl id="throughputMetrics" class="metric-grid" hidden>
+            <div><dt>Payload</dt><dd id="throughputPayload">—</dd></div>
+            <div><dt>Messages</dt><dd id="throughputMessages">0</dd></div>
+            <div><dt>Errors</dt><dd id="throughputErrors">0</dd></div>
+            <div><dt>Data rate</dt><dd id="throughputRate">0 B/s</dd></div>
+            <div><dt>Transferred</dt><dd id="throughputBytes">0 B</dd></div>
+            <div><dt>Elapsed</dt><dd id="throughputElapsed">0.0 s</dd></div>
+            <div><dt>COBS decode</dt><dd id="throughputCobs">—</dd></div>
+            <div><dt>CRC check</dt><dd id="throughputCrc">—</dd></div>
+            <div><dt>Pixel copy</dt><dd id="throughputPixelCopy">—</dd></div>
+            <div><dt>Request handling</dt><dd id="throughputFirmware">—</dd></div>
+            <div><dt>Processing total</dt><dd id="throughputProcessing">—</dd></div>
+            <div><dt>UART received</dt><dd id="throughputUartBytes">—</dd></div>
+            <div><dt>RX queue peak</dt><dd id="throughputRxPeak">—</dd></div>
+            <div><dt>Parser overflows</dt><dd id="throughputOverflows">—</dd></div>
+            <div><dt>Bottleneck</dt><dd id="throughputBottleneck">—</dd></div>
+            <div><dt>Test context</dt><dd id="throughputContext">—</dd></div>
+          </dl>
+        </div>
+      </div>
+
+      <div id="led-data-path-stress-test" class="card category-performance">
+        <header>
+          <h2>LED Refresh Test</h2>
+          <p id="stressStatus" class="health-result card-header-message" role="status" aria-live="polite"></p>
+          <button id="startStressTest" class="ghost">Start Refresh Test</button>
+          <button id="stopStressTest" class="danger" hidden>Stop</button>
+        </header>
+        <div class="body">
+          <p class="test-guidance">Automatically find the highest LED count that can sustain the selected refresh rate.</p>
+          <div class="tool-control-grid">
+            <label class="field"><span>Channels</span><select id="stressChannelScope">
+              <option value="all" selected>All channels</option>
+              <option value="range">Range</option>
+            </select></label>
+            <label class="field"><span>First channel</span><input id="stressChannelFirst" type="number" min="0" value="0" disabled /></label>
+            <label class="field"><span>Last channel</span><input id="stressChannelLast" type="number" min="0" value="0" disabled /></label>
+            <label class="field"><span>Target refresh rate</span><select id="stressTargetFps">
+              <option value="20">20 fps</option>
+              <option value="24">24 fps</option>
+              <option value="25">25 fps</option>
+              <option value="30" selected>30 fps</option>
+              <option value="40">40 fps</option>
+              <option value="60">60 fps</option>
+            </select></label>
+          </div>
+          <dl id="stressMetrics" class="metric-grid" hidden>
+            <div><dt>Tested LEDs</dt><dd id="stressLeds">—</dd></div>
+            <div><dt>Reliable limit</dt><dd id="stressLimit">—</dd></div>
+            <div><dt>Frames</dt><dd id="stressFrames">0</dd></div>
+            <div><dt>Errors</dt><dd id="stressErrors">0</dd></div>
+            <div><dt>Frame rate</dt><dd id="stressFps">0 fps</dd></div>
+            <div><dt>Average</dt><dd id="stressAverage">—</dd></div>
+            <div><dt>Data rate</dt><dd id="stressDataRate">0 B/s</dd></div>
+            <div><dt>Transferred</dt><dd id="stressBytes">0 B</dd></div>
+            <div><dt>Pixel copy</dt><dd id="stressPixelCopy">—</dd></div>
+            <div><dt>Output buffer copy</dt><dd id="stressOutputCopy">—</dd></div>
+            <div><dt>Output submit</dt><dd id="stressOutputSubmit">—</dd></div>
+            <div><dt>DMA / wire</dt><dd id="stressOutputDrain">—</dd></div>
+            <div><dt>Output total</dt><dd id="stressShow">—</dd></div>
+            <div><dt>Bottleneck</dt><dd id="stressBottleneck">—</dd></div>
+            <div><dt>Verification</dt><dd id="stressVerification">—</dd></div>
+          </dl>
+        </div>
+      </div>
+
+      <div class="card category-support workflow-power">
+        <header><h2>Power Estimate</h2></header>
+        <div class="body">
+          <p class="test-guidance">Estimate full-white demand from the configured LED count. Select the current per color component from the strip's datasheet.</p>
+          <div class="tool-control-grid">
+            <label class="field"><span>Channel</span><select id="powerChannel"></select></label>
+            <label class="field"><span>Current per color</span><select id="powerCurrentProfile">
+              <option value="5">5 mA · low-power</option>
+              <option value="12">12 mA · modern</option>
+              <option value="16">16 mA</option>
+              <option value="20" selected>20 mA · conservative</option>
+              <option value="custom">Custom</option>
+            </select></label>
+            <label id="powerCustomField" class="field" hidden><span>Custom current (mA)</span>
+              <input id="powerCustomCurrent" type="number" min="0.1" max="100" step="0.1" value="20" /></label>
+            <label class="field"><span>Supply voltage</span>
+              <input id="powerVoltage" type="number" min="1" max="60" step="0.1" value="5" /></label>
+            <label class="field"><span>Maximum brightness <output id="powerBrightnessValue" class="value">100%</output></span>
+              <input id="powerBrightness" type="range" min="1" max="100" value="100" /></label>
+          </div>
+          <dl class="metric-grid">
+            <div><dt>Pixels</dt><dd id="powerPixels">—</dd></div>
+            <div><dt>Estimated current</dt><dd id="powerAmps">—</dd></div>
+            <div><dt>Estimated power</dt><dd id="powerWatts">—</dd></div>
+            <div><dt>Suggested supply</dt><dd id="powerSupply">—</dd></div>
+          </dl>
+          <p id="powerNote" class="muted"></p>
+        </div>
+      </div>
+
+      <div id="color-order-auto-detect" class="card category-control workflow-color-order">
+        <header><h2>Color Order Setup</h2></header>
+        <div class="body">
+          <p class="muted">Sends one primary at a time and asks what you see, then computes the
+            strip's real color order.</p>
+          <div class="choices">
+            <label><input type="radio" name="components" value="3" checked /> RGB</label>
+            <label><input type="radio" name="components" value="4" /> RGBW</label>
+            <button id="detectStart" class="primary">Start Setup</button>
+          </div>
+          <p id="detectPrompt" class="muted"></p>
+          <div id="detectButtons" class="actions" hidden>
+            <button data-color="R">Red</button>
+            <button data-color="G">Green</button>
+            <button data-color="B">Blue</button>
+            <button data-color="W">White</button>
+            <button data-color="?" class="ghost">Off / other</button>
+          </div>
+          <p id="detectResult"></p>
+        </div>
+      </div>
+
+      <div id="channel-identify" class="card category-control workflow-identify">
+        <header>
+          <h2>Channel Identification</h2>
+          <button id="blackout" class="danger">Blackout</button>
+        </header>
+        <div class="body">
+          <p class="muted">Lights every channel a distinct identity — a solid color, or (once the
+            palette is exhausted) two colors alternating per pixel — so you can label which
+            physical strip is which.</p>
+          <div class="actions">
+            <button id="identifyAll" class="primary">Identify all channels</button>
+          </div>
+          <div class="grid" id="identifyLegend"></div>
+        </div>
+      </div>
+
+      <div class="card category-support workflow-report">
+        <header>
+          <h2>Diagnostic Report</h2>
+          <p id="diagnosticReportStatus" class="health-result card-header-message" role="status" aria-live="polite"></p>
+          <button id="copyDiagnosticReport" class="ghost">Copy Report</button>
+        </header>
+        <div class="body">
+          <p class="test-guidance">Create a support-friendly snapshot of this device, its configuration, test results, browser environment, and recent activity.</p>
+          <textarea id="diagnosticReport" rows="16" readonly hidden aria-label="Diagnostic report preview"></textarea>
+        </div>
+      </div>
+
+      <div class="tool-group-separator separator-visual" aria-hidden="true"></div>
+      <div class="tool-group-separator separator-performance" aria-hidden="true"></div>
+      <div class="tool-group-separator separator-support" aria-hidden="true"></div>
+      <div class="tool-group-separator separator-control" aria-hidden="true"></div>
+    </section>
+
+    <section class="card category-support">
+      <header>
+        <h2>Activity Log</h2>
+        <button id="clearLog" class="ghost">Clear</button>
+      </header>
+      <div class="body">
+        <div class="log-toolbar"><span class="muted">Protocol events and actionable error explanations.</span></div>
+        <ol id="activityLog" class="activity-log" aria-live="polite">
+          <li class="empty">No activity yet.</li>
+        </ol>
+      </div>
+    </section>
+
+    <dialog id="resetDialog" aria-labelledby="resetTitle">
+      <header><h2 id="resetTitle">Reset this device?</h2></header>
+      <div class="dialog-body">
+        <p>This clears every LED, discards buffered pixel data, and restores the controller's
+          power-on configuration.</p>
+      </div>
+      <div class="actions">
+        <button id="cancelReset">Cancel</button>
+        <button id="confirmReset" class="danger">Reset device</button>
+      </div>
+    </dialog>
+
+    <footer>
+      <span id="workbenchVersion" data-version="0.1.36">Opalinx Workbench v0.1.36</span>
+      <span>&copy; 2026 Jean-Philippe Cô</span>
+    </footer>
+  </div>
+
+  <script src="./desktop-window-state.js"></script>
+  <script type="module">
+    import {
+      OpalinxClient, reorderToWire, hasCapability, Capability, ErrorCode, COLOR_ORDERS, PROTOCOLS, BROADCAST_CHANNEL,
+      bytesPerLed, isRgbw,
+    } from 'opalinx';
+    import { WebSerialTransport } from 'opalinx/webserial';
+
+    const byId = (id) => document.getElementById(id);
+
+    // Firmware profiling is a vendor-specific Opalinx extension. The pinned opalinx exposes a
+    // public, version-aware getPerformanceMetrics() (v2–v5), so delegate to it rather than duplicating
+    // the decoder or reaching into the client's private request primitive.
+    async function getPerformanceMetrics({ reset = false, timeout = 2000 } = {}) {
+      if (typeof client?.getPerformanceMetrics !== 'function') {
+        throw new Error('This Opalinx client cannot request firmware metrics.');
+      }
+      return client.getPerformanceMetrics({ reset, timeout });
+    }
+
+    async function optionalPerformanceMetrics(options = {}) {
+      if (firmwareMetricsSupport === false) return null;
+      try {
+        const metrics = await getPerformanceMetrics(options);
+        firmwareMetricsSupport = true;
+        return metrics;
+      } catch (err) {
+        // Performance metrics are a vendor extension, not an Opalinx requirement. Unknown-command,
+        // unsupported-command, and timeout responses mean the test must use acknowledged host
+        // timing instead of failing an otherwise compatible controller.
+        if (err?.name === 'OpalinxTimeoutError' && firmwareMetricsSupport === true) {
+          // A previously confirmed extension can time out temporarily after an intentionally
+          // overloaded benchmark candidate. Preserve support and let that sample fall back.
+          return null;
+        }
+        if ((err?.name === 'OpalinxError'
+            && [ErrorCode.UNKNOWN_IDENTIFIER, ErrorCode.UNSUPPORTED].includes(err.code))
+            || err?.name === 'OpalinxTimeoutError'
+            || /performance metrics|firmware metrics|unsupported/i.test(err?.message || '')) {
+          firmwareMetricsSupport = false;
+          return null;
+        }
+        throw err;
+      }
+    }
+
+    // Card disclosure state is local to this browser and restored on the next visit.
+    const CARD_STATE_KEY = 'opalinx-workbench-card-state';
+    let savedCardState = {};
+    try {
+      savedCardState = JSON.parse(
+        localStorage.getItem(CARD_STATE_KEY) || '{}',
+      );
+    }
+    catch { savedCardState = {}; }
+
+    const cardDisclosures = [];
+    document.querySelectorAll('.card').forEach((card, index) => {
+      const header = card.querySelector(':scope > header');
+      const body = card.querySelector(':scope > .body');
+      const heading = header?.querySelector('h2');
+      if (!header || !body || !heading) return;
+
+      const slug = heading.textContent.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      const key = card.id || slug || `card-${index + 1}`;
+      const bodyId = body.id || `card-body-${key}`;
+      body.id = bodyId;
+
+      // Every card header uses the same three zones. Group any direct action buttons
+      // automatically so new cards inherit the layout without extra markup.
+      let actionGroup = header.querySelector(':scope > .card-header-actions');
+      if (!actionGroup) {
+        actionGroup = document.createElement('div');
+        actionGroup.className = 'card-header-actions';
+        header.append(actionGroup);
+      }
+      for (const button of [...header.querySelectorAll(':scope > button')]) actionGroup.append(button);
+
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'collapse-toggle ghost';
+      toggle.setAttribute('aria-controls', bodyId);
+      toggle.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>';
+
+      const setCollapsed = (collapsed, save = true) => {
+        card.classList.toggle('is-collapsed', collapsed);
+        toggle.setAttribute('aria-expanded', String(!collapsed));
+        toggle.setAttribute('aria-label', `${collapsed ? 'Expand' : 'Collapse'} ${heading.textContent.trim()}`);
+        toggle.title = collapsed
+          ? 'Expand card · Shift-click to expand all cards'
+          : 'Collapse card · Shift-click to collapse all cards';
+        if (save) {
+          savedCardState[key] = collapsed;
+          localStorage.setItem(CARD_STATE_KEY, JSON.stringify(savedCardState));
+        }
+      };
+
+      setCollapsed(savedCardState[key] === true, false);
+      cardDisclosures.push({ card, setCollapsed });
+      toggle.addEventListener('click', (event) => {
+        if (event.shiftKey) {
+          const collapseAll = !card.classList.contains('is-collapsed');
+          for (const disclosure of cardDisclosures) disclosure.setCollapsed(collapseAll);
+          return;
+        }
+        setCollapsed(!card.classList.contains('is-collapsed'));
+      });
+      actionGroup.append(toggle);
+    });
+
+    const setStatus = (m, kind = '') => {
+      byId('status').textContent = m;
+      byId('status').className = 'sr-only';
+      byId('status').dataset.kind = kind;
+    };
+    const setConnected = (on, label) => {
+      byId('connPill').hidden = !on;
+      byId('connPill').classList.toggle('is-on', on);
+      byId('connLabel').textContent = label ?? (on ? 'Connected' : 'Disconnected');
+    };
+    const ERROR_GUIDANCE = {
+      [ErrorCode.UNSPECIFIED]: 'The controller reported an unspecified error. Retry the operation.',
+      [ErrorCode.UNKNOWN_IDENTIFIER]: 'The controller did not recognize this command. Check protocol compatibility.',
+      [ErrorCode.INVALID_PAYLOAD_LENGTH]: 'The command size was invalid. Refresh the device configuration and retry.',
+      [ErrorCode.INVALID_PARAMETER]: 'A value was outside the device\'s supported range. Check the channel and LED settings.',
+      [ErrorCode.BUSY]: 'The controller is busy transmitting LEDs. Wait briefly and retry.',
+      [ErrorCode.UNSUPPORTED]: 'This controller does not support the requested operation.',
+      [ErrorCode.DEVICE_FAULT]: 'The controller could not complete the operation internally. Stop output, reconnect, and retry; persistent failures require firmware or hardware diagnosis.',
+    };
+
+    function friendlyError(err) {
+      if (err?.name === 'OpalinxError') {
+        const guidance = ERROR_GUIDANCE[err.code] ?? `Device error: ${err.message}`;
+        return `${guidance} (${err.codeName})`;
+      }
+      if (err?.name === 'OpalinxTimeoutError') return 'The controller did not respond in time. Check the connection and retry.';
+      if (err?.name === 'OpalinxFramingError') return 'A malformed serial frame was received. Check that the selected port is an Opalinx device.';
+      if (err?.name === 'NetworkError' && /(failed|unable) to open serial port/i.test(err.message || '')) {
+        return 'The selected serial port could not be opened. It may be in use by another app, disconnected, or unavailable.';
+      }
+      if (err?.name === 'InvalidStateError' && /(already open|open serial port)/i.test(err.message || '')) {
+        return 'The selected serial port is already open. Disconnect it first, then try again.';
+      }
+      return err?.message || String(err);
+    }
+
+    function addLog(level, message) {
+      const log = byId('activityLog');
+      log.querySelector('.empty')?.remove();
+      const newest = log.firstElementChild;
+      const newestMessage = newest?.querySelector('.log-message');
+      if (newest?.classList.contains(`log-${level}`) && newestMessage?.dataset.baseMessage === message) {
+        const count = Number(newestMessage.dataset.repeatCount || 1) + 1;
+        newestMessage.dataset.repeatCount = String(count);
+        newestMessage.textContent = `${message} ×${count}`;
+        const time = newest.querySelector('time');
+        time.dateTime = new Date().toISOString();
+        time.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        return;
+      }
+      const item = document.createElement('li');
+      item.className = `log-${level}`;
+      const time = document.createElement('time');
+      time.dateTime = new Date().toISOString();
+      time.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const badge = document.createElement('span');
+      badge.className = 'log-level';
+      badge.textContent = level === 'error' ? 'Error' : level;
+      const text = document.createElement('span');
+      text.className = 'log-message';
+      text.textContent = message;
+      text.dataset.baseMessage = message;
+      text.dataset.repeatCount = '1';
+      item.append(time, badge, text);
+      log.prepend(item);
+      while (log.children.length > 100) log.lastElementChild.remove();
+    }
+
+    function reportError(action, err) {
+      const message = `${action}: ${friendlyError(err)}`;
+      setStatus(message, 'err');
+      addLog('error', message);
+    }
+
+    byId('clearLog').addEventListener('click', () => {
+      byId('activityLog').innerHTML = '<li class="empty">No activity yet.</li>';
+    });
+
+    // Theme toggle (persisted; initial value set by the inline <head> script).
+    const themeBtn = byId('themeToggle');
+    function applyTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+      localStorage.setItem('opalinx-theme', theme);
+      const dark = theme === 'dark';
+      themeBtn.innerHTML = `<span aria-hidden="true">${dark ? '☀' : '🌙'}</span> ` +
+        `<span class="theme-label">${dark ? 'Light' : 'Dark'}</span>`;
+      themeBtn.setAttribute('aria-label', `Switch to ${dark ? 'light' : 'dark'} theme`);
+    }
+    applyTheme(document.documentElement.getAttribute('data-theme') || 'dark');
+    themeBtn.addEventListener('click', () => {
+      applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+    });
+
+    let client = null;
+    let info = null;
+    let serialEnvironment = null;
+    let firmwareMetricsSupport = null;
+    const browserDetailsPromise = navigator.userAgentData?.getHighEntropyValues?.([
+      'architecture', 'bitness', 'model', 'platformVersion', 'fullVersionList',
+    ]).catch(() => null) ?? Promise.resolve(null);
+
+    const hexId = (value) => Number.isInteger(value)
+      ? `0x${value.toString(16).toUpperCase().padStart(4, '0')}`
+      : 'Unavailable';
+    const formatRevision = (value) => /^\d+(?:\.\d+)*$/.test(String(value ?? ''))
+      ? `v${value}`
+      : value;
+
+    async function readTransportEnvironment(transport) {
+      const port = transport?._port;
+      const usb = typeof transport?.getInfo === 'function'
+        ? transport.getInfo()
+        : (port?.getInfo?.() ?? {});
+      const options = transport?.openOptions ?? { ...(transport?._openOptions ?? {}) };
+      let signals = null;
+      try {
+        signals = typeof transport?.getSignals === 'function'
+          ? await transport.getSignals()
+          : (port?.getSignals ? await port.getSignals() : null);
+      } catch { /* signals are optional */ }
+      const streams = transport?.streamState ?? {
+        open: transport?.isOpen ?? transport?._writer != null,
+        readable: port?.readable != null,
+        writable: port?.writable != null,
+      };
+      return { usb, options, signals, streams, transport };
+    }
+
+    function maxPixelsPerRequest(components) {
+      return Math.max(1, Math.floor(((info?.maxPayloadLength ?? 5) - 5) / components));
+    }
+
+    // Curated maximally-distinct palette. Channels beyond the palette get a two-color pattern
+    // (colors alternating per pixel), which expands the distinguishable identities combinatorially.
+    const PALETTE = [
+      { name: 'Red', rgb: [255, 0, 0] },
+      { name: 'Green', rgb: [0, 255, 0] },
+      { name: 'Blue', rgb: [0, 0, 255] },
+      { name: 'Yellow', rgb: [255, 200, 0] },
+      { name: 'Cyan', rgb: [0, 255, 255] },
+      { name: 'Magenta', rgb: [255, 0, 255] },
+      { name: 'White', rgb: [255, 255, 255] },
+      { name: 'Orange', rgb: [255, 80, 0] },
+    ];
+    const IDENTIFY_BRIGHTNESS = 0.5;
+    const css = (rgb) => `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
+    const COLOR_BY_NAME = Object.fromEntries(PALETTE.map((p) => [p.name, p.rgb]));
+
+    // Curated two-color combinations for channels beyond the solid palette. Ordered most-distinct
+    // first; each alternates per pixel. The two colors within a combo are high-contrast, and the
+    // combos are chosen to look clearly different from one another (no warm/warm lookalikes such
+    // as Red/Orange vs Red/Yellow).
+    const PAIRS = [
+      ['Red', 'Cyan'], ['Green', 'Magenta'], ['Blue', 'Yellow'],
+      ['White', 'Red'], ['White', 'Green'], ['White', 'Blue'], ['White', 'Magenta'],
+      ['Orange', 'Green'], ['White', 'Orange'], ['White', 'Cyan'],
+      ['Red', 'Green'], ['Cyan', 'Magenta'],
+    ];
+
+    // Build `count` distinct identities: solid colors first, then the curated combinations.
+    function buildIdentities(count) {
+      const ids = PALETTE.map((p) => ({ label: p.name, colors: [p.rgb] }));
+      for (const [a, b] of PAIRS) {
+        if (ids.length >= count) break;
+        ids.push({ label: `${a}/${b}`, colors: [COLOR_BY_NAME[a], COLOR_BY_NAME[b]] });
+      }
+      // Fallback for very high channel counts: fill with any remaining distinct pairs.
+      for (let i = 0; i < PALETTE.length && ids.length < count; i++) {
+        for (let j = i + 1; j < PALETTE.length && ids.length < count; j++) {
+          const label = `${PALETTE[i].name}/${PALETTE[j].name}`;
+          if (!ids.some((id) => id.label === label)) {
+            ids.push({ label, colors: [PALETTE[i].rgb, PALETTE[j].rgb] });
+          }
+        }
+      }
+      return ids.slice(0, count);
+    }
+
+    // Flat logical buffer for one channel: a solid color, or colors alternating per pixel.
+    function identityBuffer(identity, ledCount, components) {
+      const out = new Uint8Array(ledCount * components);
+      for (let i = 0; i < ledCount; i++) {
+        const [r, g, b] = identity.colors[i % identity.colors.length];
+        const base = i * components;
+        out[base] = Math.round(r * IDENTIFY_BRIGHTNESS);
+        out[base + 1] = Math.round(g * IDENTIFY_BRIGHTNESS);
+        out[base + 2] = Math.round(b * IDENTIFY_BRIGHTNESS);
+        // W (base + 3) stays 0 on RGBW channels.
+      }
+      return out;
+    }
+
+    function legendItem(channel, identity) {
+      const bg = identity.colors.length === 1
+        ? css(identity.colors[0])
+        : `repeating-linear-gradient(45deg, ${css(identity.colors[0])} 0 5px, ${css(identity.colors[1])} 5px 10px)`;
+      return `<div><span class="swatch" style="background:${bg}"></span> Ch ${channel}: ${identity.label}</div>`;
+    }
+
+    // ---- Populate static selects ----
+    for (const order of COLOR_ORDERS) {
+      byId('cfgOrder').add(new Option(order, order));
+    }
+    byId('cfgOrder').value = 'GRB';
+    for (const name of Object.keys(PROTOCOLS)) {
+      byId('cfgSpeed').add(new Option(name, name));
+    }
+
+    // ---- Connect / disconnect ----
+    const connectToggle = byId('connectToggle');
+    let intentionalDisconnect = false;
+    let connectionRetryCount = 0;
+    const connectionRetryStages = new Set();
+    const OPALINX_SERIAL_FILTERS = [
+      { usbVendorId: 0x16c0 }, // PJRC / Teensy
+      { usbVendorId: 0x303a }, // Espressif native USB
+      { usbVendorId: 0x1a86 }, // WCH CH34x USB-to-serial bridges
+    ];
+
+    function showConnectionAttempt(message, { kind = '', busy = false } = {}) {
+      const notice = byId('connectionAttemptStatus');
+      notice.textContent = message;
+      notice.className = `connection-attempt-status${kind ? ` is-${kind}` : ''}${busy ? ' is-busy' : ''}`;
+      notice.hidden = false;
+    }
+
+    function hideConnectionAttempt() {
+      byId('connectionAttemptStatus').hidden = true;
+    }
+
+    async function retryInitialTimeout(operation, {
+      attempts = 3,
+      interval = 250,
+      stage = 'Connection',
+    } = {}) {
+      let lastError;
+      for (let attempt = 1; attempt <= attempts; attempt++) {
+        try {
+          return await operation();
+        } catch (err) {
+          lastError = err;
+          if (err?.name !== 'OpalinxTimeoutError' || attempt === attempts) throw err;
+          connectionRetryCount++;
+          connectionRetryStages.add(stage);
+          const message = `${stage} timed out. Retrying (${attempt + 1}/${attempts})…`;
+          setStatus(message, 'warn');
+          showConnectionAttempt(message, { kind: 'warn', busy: true });
+          addLog('warn', message);
+          await delay(interval);
+        }
+      }
+      throw lastError;
+    }
+
+    connectToggle.addEventListener('click', async () => {
+      if (client) {
+        try {
+          await stopActiveLedTask({ blackoutAfter: false });
+          await blackout();
+          addLog('ok', 'Blacked out all channels before disconnecting.');
+        } catch (err) {
+          addLog('warn', `Could not confirm blackout before disconnecting: ${friendlyError(err)}`);
+        }
+        intentionalDisconnect = true;
+        try { await client.close(); } catch { /* ignore */ }
+        intentionalDisconnect = false;
+        client = null;
+        info = null;
+        firmwareMetricsSupport = null;
+        connectToggle.textContent = 'Connect';
+        connectToggle.hidden = false;
+        connectToggle.classList.remove('danger');
+        connectToggle.classList.add('primary');
+        for (const s of ['infoSection', 'configSection', 'toolsSection']) byId(s).hidden = true;
+        setLedOutputMode('none');
+        setConnected(false);
+        setStatus('Disconnected.');
+        hideConnectionAttempt();
+        addLog('info', 'Disconnected from the controller.');
+        return;
+      }
+
+      connectToggle.disabled = true;
+      connectToggle.classList.add('is-loading');
+      connectToggle.textContent = 'Connecting…';
+      connectionRetryCount = 0;
+      connectionRetryStages.clear();
+      try {
+        setStatus('Requesting port…');
+        showConnectionAttempt('Choose a serial port to connect.', { busy: true });
+        // Matches the firmware's HOST_SERIAL_BAUD (used on the CH343/UART path; ignored on USB-CDC).
+        const transport = await WebSerialTransport.request(
+          { filters: OPALINX_SERIAL_FILTERS },
+          { baudRate: 3000000 },
+        );
+        firmwareMetricsSupport = null;
+        // The client checks the device's Opalinx major against SUPPORTED_PROTOCOL_MAJOR automatically
+        // during handshake, so a mismatching device is rejected rather than driven with a
+        // potentially incompatible wire format.
+        client = new OpalinxClient(transport);
+        let connectionReady = false;
+        client.addListener('opalinxError', (e) => {
+          if (['stress', 'throughput'].includes(activeLedTask?.type)) {
+            activeLedTask.deviceErrors++;
+            return;
+          }
+          // The CH343 may reset the controller when its port opens. Ignore a malformed partial
+          // frame during startup; the correlated handshake below still has to succeed.
+          if (!connectionReady && e.code === ErrorCode.FRAMING_ERROR) return;
+          reportError('Device error', e);
+        });
+        client.addListener('framingError', (e) => {
+          if (['stress', 'throughput'].includes(activeLedTask?.type)) {
+            activeLedTask.deviceErrors++;
+            return;
+          }
+          // Ignore boot-time or partial UART input while the handshake establishes framing.
+          if (!connectionReady) return;
+          reportError('Serial framing error', e);
+        });
+        client.addListener('error', (e) => reportError('Transport error', e));
+        const connectedClient = client;
+        client.addListener('close', () => {
+          if (intentionalDisconnect || client !== connectedClient || !connectionReady) return;
+          if (activeLedTask) activeLedTask.cancelled = true;
+          client = null;
+          info = null;
+          firmwareMetricsSupport = null;
+          connectToggle.textContent = 'Connect';
+          connectToggle.hidden = false;
+          connectToggle.classList.remove('danger');
+          connectToggle.classList.add('primary');
+          for (const s of ['infoSection', 'configSection', 'toolsSection']) byId(s).hidden = true;
+          setLedOutputMode('none');
+          setConnected(false);
+          setStatus('Device disconnected.');
+          addLog('warn', 'The controller was disconnected.');
+        });
+
+        await client.open();
+        serialEnvironment = await readTransportEnvironment(transport);
+        // Give DTR/RTS and firmware session-state changes a moment to propagate. Without this,
+        // the first INFO frame can be sent while a native USB device is still noticing that the
+        // host opened its port, or while a USB-UART-connected controller is finishing startup.
+        setStatus('Preparing connection…');
+        showConnectionAttempt('Preparing the controller connection…', { busy: true });
+        await delay(200);
+        setStatus('Handshaking…');
+        showConnectionAttempt('Identifying the controller…', { busy: true });
+        // Use the library's full handshake (retries:0 — Workbench's retryInitialTimeout drives the
+        // retries and UI). handshake() performs ALL compatibility checks the library requires — not
+        // just the protocol major, but also max_in_flight_frames === 2 and max_payload_length >= 4101
+        // — so Workbench never connects to a device it would later drive unsafely at pipeline depth 2.
+        // A compatibility failure throws a non-timeout error that retryInitialTimeout surfaces to the
+        // shared catch below without retrying.
+        info = await retryInitialTimeout(
+          () => client.handshake({ retries: 0, timeout: 1000 }),
+          { attempts: 5, interval: 250, stage: 'Initial handshake' },
+        );
+        renderInfo(info);
+        buildChannelSelect(info.channelCount, info.capabilities);
+        setStatus('Reading configuration…');
+        showConnectionAttempt('Reading the controller configuration…', { busy: true });
+        const config = await retryInitialTimeout(
+          () => refreshConfig({ timeout: 1500 }),
+          { attempts: 3, interval: 250, stage: 'Configuration read' },
+        );
+        buildTestChannelSelect(config);
+        setLedOutputMode('none');
+        connectionReady = true;
+
+        connectToggle.disabled = false;
+        connectToggle.classList.remove('is-loading');
+        connectToggle.textContent = 'Disconnect';
+        connectToggle.hidden = false;
+        connectToggle.classList.remove('primary');
+        connectToggle.classList.add('danger');
+        for (const s of ['infoSection', 'configSection', 'toolsSection']) byId(s).hidden = false;
+        setConnected(true, info.deviceName || 'Connected');
+        setStatus(`Connected to "${info.deviceName}".`, 'ok');
+        addLog('ok', `Connected to ${info.deviceName || 'Opalinx device'} using protocol v${info.protocol.major}.${info.protocol.minor}.${info.protocol.patch}.`);
+        if (connectionRetryCount > 0) {
+          const stages = [...connectionRetryStages].join(' and ').toLowerCase();
+          const retrySummary = `Connected after ${connectionRetryCount} ${connectionRetryCount === 1 ? 'retry' : 'retries'} (${stages}).`;
+          showConnectionAttempt(retrySummary, { kind: 'warn' });
+          addLog('warn', retrySummary);
+        } else {
+          hideConnectionAttempt();
+        }
+      } catch (err) {
+        if (err?.name === 'NotFoundError') {
+          setStatus('Not connected.');
+          setConnected(false);
+          connectToggle.textContent = 'Connect';
+          connectToggle.hidden = false;
+          connectToggle.disabled = false;
+          connectToggle.classList.remove('is-loading');
+          connectToggle.classList.remove('danger');
+          connectToggle.classList.add('primary');
+          client = null;
+          hideConnectionAttempt();
+          addLog('info', 'Connection selection cancelled.');
+          return;
+        }
+        reportError('Connection failed', err);
+        setConnected(false);
+        connectToggle.textContent = 'Connect';
+        connectToggle.hidden = false;
+        connectToggle.disabled = false;
+        connectToggle.classList.remove('is-loading');
+        connectToggle.classList.remove('danger');
+        connectToggle.classList.add('primary');
+        showConnectionAttempt(`Connection failed: ${friendlyError(err)}`, { kind: 'error' });
+        try { await client?.close(); } catch { /* ignore cleanup errors */ }
+        client = null;
+      }
+    });
+    // ---- Info rendering ----
+    function renderInfo(i) {
+      const rows = {
+        Protocol: `v${i.protocol.major}.${i.protocol.minor}.${i.protocol.patch}`,
+        Firmware: `v${i.firmware.major}.${i.firmware.minor}.${i.firmware.patch}`,
+        'Hardware revision': formatRevision(i.hardwareRevision),
+        'Hardware platform': i.hardwarePlatform,
+        Transport: i.transport,
+        Channels: i.channelCount,
+        'Max payload': `${i.maxPayloadLength} bytes`,
+        'Frames in flight': i.maxInFlightFrames,
+        'Max LEDs (RGB/RGBW)': `${i.maxLedsRgb} / ${i.maxLedsRgbw}`,
+        'USB ID': `${hexId(serialEnvironment?.usb?.usbVendorId)}:${hexId(serialEnvironment?.usb?.usbProductId)}`,
+      };
+      byId('infoList').innerHTML = Object.entries(rows)
+        .map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
+
+      const caps = [
+        ['RGBW', Capability.RGBW],
+        ['PER_CHANNEL_CONFIG', Capability.PER_CHANNEL_CONFIG],
+        ['PER_CHANNEL_SHOW', Capability.PER_CHANNEL_SHOW],
+      ];
+      byId('capBadges').innerHTML = caps.map(([name, flag]) => {
+        const on = hasCapability(i.capabilities, flag);
+        return `<span class="${on ? 'cap-on' : ''}">${on ? '✓' : '✗'} ${name}</span>`;
+      }).join('');
+    }
+
+    function buildChannelSelect(count, capabilities) {
+      const sel = byId('cfgChannel');
+      sel.innerHTML = '';
+      sel.add(new Option('All (broadcast)', String(BROADCAST_CHANNEL)));
+      const perChannel = hasCapability(capabilities, Capability.PER_CHANNEL_CONFIG);
+      for (let c = 0; c < count; c++) {
+        const opt = new Option(`Channel ${c}`, String(c));
+        opt.disabled = !perChannel;
+        sel.add(opt);
+      }
+      sel.value = String(BROADCAST_CHANNEL);
+      sel.title = perChannel ? '' : 'Device advertises broadcast-only configuration';
+    }
+
+    function populateLedChannelSelect(id, config, allLabel) {
+      const sel = byId(id);
+      const selected = sel.value;
+      sel.innerHTML = '';
+      sel.add(new Option(allLabel, String(BROADCAST_CHANNEL)));
+      for (const entry of config) sel.add(new Option(`Channel ${entry.channel}`, String(entry.channel)));
+      sel.value = [...sel.options].some((option) => option.value === selected)
+        ? selected : String(BROADCAST_CHANNEL);
+    }
+
+    function configureChannelRange(prefix, config) {
+      const scope = byId(`${prefix}ChannelScope`);
+      const first = byId(`${prefix}ChannelFirst`);
+      const last = byId(`${prefix}ChannelLast`);
+      const channels = config.map((entry) => entry.channel).sort((a, b) => a - b);
+      const minimum = channels[0] ?? 0;
+      const maximum = channels.at(-1) ?? 0;
+      for (const input of [first, last]) {
+        input.min = String(minimum);
+        input.max = String(maximum);
+      }
+      if (!scope.dataset.initialized) {
+        first.value = String(minimum);
+        last.value = String(maximum);
+        scope.dataset.initialized = 'true';
+      }
+      first.value = String(Math.min(maximum, Math.max(minimum, Number(first.value))));
+      last.value = String(Math.min(maximum, Math.max(Number(first.value), Number(last.value))));
+      const rangeEnabled = scope.value === 'range';
+      first.disabled = !rangeEnabled;
+      last.disabled = !rangeEnabled;
+    }
+
+    function selectedChannelRange(prefix) {
+      const config = [...(client?.config ?? [])].sort((a, b) => a.channel - b.channel);
+      const all = byId(`${prefix}ChannelScope`).value === 'all';
+      if (all) return { all, entries: config, channels: config.map((entry) => entry.channel) };
+      const first = Number(byId(`${prefix}ChannelFirst`).value);
+      const last = Number(byId(`${prefix}ChannelLast`).value);
+      const entries = config.filter((entry) => entry.channel >= first && entry.channel <= last);
+      return { all, entries, channels: entries.map((entry) => entry.channel), first, last };
+    }
+
+    function buildTestChannelSelect(config) {
+      populateLedChannelSelect('testChannel', config, 'All channels');
+      populateLedChannelSelect('signalChannel', config, 'All channels');
+      populateLedChannelSelect('patternChannel', config, 'All channels');
+      populateLedChannelSelect('powerChannel', config, 'All channels');
+      configureChannelRange('throughput', config);
+      configureChannelRange('stress', config);
+      if (!byId('signalChannel').dataset.initialized && config.length) {
+        byId('signalChannel').value = String(config[0].channel);
+        byId('patternChannel').value = String(config[0].channel);
+        for (const id of ['signalChannel', 'patternChannel']) {
+          byId(id).dataset.initialized = 'true';
+        }
+      }
+      updateTestControls(true);
+      updatePowerEstimate();
+      updateThroughputModeAvailability();
+    }
+
+    function selectedTestConfigs() {
+      const channel = Number(byId('testChannel').value);
+      const config = client?.config ?? [];
+      return channel === BROADCAST_CHANNEL ? config : config.filter((entry) => entry.channel === channel);
+    }
+
+    function updateTestControls(resetRange = false) {
+      const entries = selectedTestConfigs();
+      const allRgbw = entries.length > 0 && entries.every((entry) => isRgbw(entry.colorOrder));
+      const maxLed = entries.length ? Math.min(...entries.map((entry) => entry.ledCount)) : 1;
+      byId('testWhiteField').hidden = !allRgbw;
+      for (const id of ['testRangeMin', 'testRangeMax']) byId(id).max = String(maxLed);
+      if (resetRange) {
+        byId('testRangeMin').value = '1';
+        byId('testRangeMax').value = String(maxLed);
+      }
+
+      const sameComponents = entries.every((entry) => isRgbw(entry.colorOrder) === allRgbw);
+      const sameOrder = entries.every((entry) => entry.colorOrder === entries[0]?.colorOrder);
+      const broadcast = Number(byId('testChannel').value) === BROADCAST_CHANNEL;
+      byId('testScopeRange').disabled = !entries.length || (broadcast && !sameOrder);
+      if (byId('testScopeRange').disabled && byId('testScopeRange').checked) {
+        document.querySelector('input[name="testScope"][value="all"]').checked = true;
+      }
+      const rangeEnabled = document.querySelector('input[name="testScope"]:checked').value === 'range';
+      const rangeField = document.querySelector('.test-range-field');
+      rangeField.classList.toggle('is-disabled', !rangeEnabled);
+      for (const id of ['testRangeMin', 'testRangeMax']) byId(id).disabled = !rangeEnabled;
+      byId('testHint').textContent = broadcast && !sameComponents
+        ? 'Live color is unavailable because broadcast tests require matching RGB/RGBW component counts.'
+        : broadcast && !sameOrder
+          ? 'Color changes are live for all LEDs. Range mode requires matching color orders on every channel.'
+          : '';
+    }
+
+    function selectedTestColor() {
+      const hex = byId('testColor').value;
+      const brightness = Number(byId('testBrightness').value) / 100;
+      const component = (offset) => Math.round(parseInt(hex.slice(offset, offset + 2), 16) * brightness);
+      const color = { r: component(1), g: component(3), b: component(5) };
+      if (!isRgbw(selectedTestConfigs()[0]?.colorOrder)) return color;
+      color.w = Math.round(Number(byId('testWhite').value) * brightness);
+      return color;
+    }
+
+    async function commitTest(channel, ack = true) {
+      const canShowChannel = hasCapability(info.capabilities, Capability.PER_CHANNEL_SHOW);
+      await client.show(channel !== BROADCAST_CHANNEL && canShowChannel ? channel : BROADCAST_CHANNEL, { waitForDisplay: ack });
+    }
+
+    let liveTestTimer = null;
+    let liveTestRunning = false;
+    let liveTestQueued = false;
+    let liveTestVersion = 0;
+    let ledOutputMode = 'none';
+
+    function setLedOutputMode(mode) {
+      ledOutputMode = mode;
+      byId('showLiveTest').disabled = mode === 'live';
+      byId('showPattern').disabled = mode === 'pattern';
+    }
+
+    function scheduleLiveTest(delay = 75) {
+      liveTestVersion++;
+      clearTimeout(liveTestTimer);
+      liveTestTimer = setTimeout(applyLiveTestColor, delay);
+    }
+
+    async function applyLiveTestColor() {
+      if (!client || byId('toolsSection').hidden) return;
+      await stopActiveLedTask({ blackoutAfter: false });
+      if (liveTestRunning) { liveTestQueued = true; return; }
+      const version = liveTestVersion;
+      const channel = Number(byId('testChannel').value);
+      const entries = selectedTestConfigs();
+      const sameComponents = entries.length && entries.every(
+        (entry) => isRgbw(entry.colorOrder) === isRgbw(entries[0].colorOrder),
+      );
+      if (!sameComponents) return;
+
+      liveTestRunning = true;
+      try {
+        const scope = document.querySelector('input[name="testScope"]:checked').value;
+        const color = selectedTestColor();
+        if (scope === 'all') {
+          const uniformOrder = entries.every((entry) => entry.colorOrder === entries[0].colorOrder);
+          if (channel === BROADCAST_CHANNEL && !uniformOrder) {
+            // Mixed color orders: a single broadcast Fill Channel would send identical bytes to
+            // channels that interpret them differently (and the client rejects it). Fill each channel
+            // in its own configured order, then commit once with a broadcast Show below — the same
+            // pattern the blackout path uses.
+            for (const entry of entries) {
+              await client.fillChannel(entry.channel, color, { ack: true });
+            }
+          } else {
+            await client.fillChannel(channel, color, { ack: true });
+          }
+        } else {
+          const first = Number(byId('testRangeMin').value);
+          const last = Number(byId('testRangeMax').value);
+          const maxLed = Math.min(...entries.map((entry) => entry.ledCount));
+          requireCondition(
+            Number.isInteger(first) && Number.isInteger(last) && first >= 1 && last >= first && last <= maxLed,
+            `Choose a valid inclusive range from 1 to ${maxLed}.`,
+          );
+
+          const rgbw = isRgbw(entries[0].colorOrder);
+          const components = rgbw ? 4 : 3;
+          const values = [color.r, color.g, color.b, ...(rgbw ? [color.w] : [])];
+          const offValues = new Array(components).fill(0);
+          const maxChunk = maxPixelsPerRequest(components);
+          const writeSolidRange = async (offset, total, componentsToWrite) => {
+            let remaining = total;
+            while (remaining > 0) {
+              const count = Math.min(remaining, maxChunk);
+              const logical = new Uint8Array(count * components);
+              for (let led = 0; led < count; led++) logical.set(componentsToWrite, led * components);
+              const wire = reorderToWire(logical, entries[0].colorOrder);
+              await client.setPixels(channel, count, wire, { offset, ack: true });
+              offset += count;
+              remaining -= count;
+            }
+          };
+
+          // Write the complete strip through Set Pixels. This explicitly rewrites LED 1 as black
+          // whenever it falls before the selected range and avoids mixing two firmware code paths.
+          await writeSolidRange(0, first - 1, offValues);
+          await writeSolidRange(first - 1, last - first + 1, values);
+          await writeSolidRange(last, maxLed - last, offValues);
+        }
+        // A newer edit arrived while this frame was being buffered. Do not show the stale
+        // frame; queue a fresh pass so the LEDs transition directly to the latest range.
+        if (version !== liveTestVersion) {
+          liveTestQueued = true;
+          return;
+        }
+        await commitTest(channel);
+        setLedOutputMode('live');
+        setStatus('Live LED color updated.', 'ok');
+      } catch (err) {
+        byId('showLiveTest').disabled = ledOutputMode === 'live';
+        reportError('Live LED control failed', err);
+      } finally {
+        liveTestRunning = false;
+        if (liveTestQueued) {
+          liveTestQueued = false;
+          scheduleLiveTest();
+        }
+      }
+    }
+
+    byId('testChannel').addEventListener('change', () => {
+      updateTestControls(true);
+      scheduleLiveTest();
+    });
+    for (const scope of document.querySelectorAll('input[name="testScope"]')) {
+      scope.addEventListener('change', () => {
+        updateTestControls();
+        scheduleLiveTest();
+      });
+    }
+    byId('testColor').addEventListener('input', () => scheduleLiveTest());
+    byId('testBrightness').addEventListener('input', () => {
+      byId('testBrightnessValue').value = `${byId('testBrightness').value}%`;
+      scheduleLiveTest();
+    });
+    byId('testWhite').addEventListener('input', () => {
+      byId('testWhiteValue').value = byId('testWhite').value;
+      scheduleLiveTest();
+    });
+    for (const id of ['testRangeMin', 'testRangeMax']) {
+      byId(id).addEventListener('input', () => scheduleLiveTest(250));
+      byId(id).addEventListener('change', () => scheduleLiveTest(0));
+    }
+
+    byId('showLiveTest').addEventListener('click', () => {
+      byId('showLiveTest').disabled = true;
+      scheduleLiveTest(0);
+    });
+
+    byId('testBlackout').addEventListener('click', async () => {
+      try {
+        await stopActiveLedTask();
+        byId('showLiveTest').disabled = false;
+        setStatus('All channels blacked out.', 'ok');
+        addLog('ok', 'Blacked out all channels.');
+      } catch (err) { reportError('Blackout failed', err); }
+    });
+
+    // ---- Configuration ----
+    async function refreshConfig(options = {}) {
+      const config = await client.getConfig(options);
+      renderConfigTable(config);
+      if (config[0]) {
+        byId('cfgOrder').value = config[0].colorOrder;
+        byId('cfgLeds').value = config[0].ledCount;
+        const speedName = Object.keys(PROTOCOLS).find((n) => PROTOCOLS[n] === config[0].protocolValue);
+        if (speedName) byId('cfgSpeed').value = speedName;
+      }
+      buildTestChannelSelect(config);
+      return config;
+    }
+
+    function renderConfigTable(config) {
+      const speedLabel = (value) => {
+        const name = Object.keys(PROTOCOLS).find((key) => PROTOCOLS[key] === value);
+        return name ? name.replace('_', ' ').replace('KHZ', ' kHz') : `0x${value.toString(16).padStart(2, '0')}`;
+      };
+      byId('configTable').innerHTML = `<ul class="channel-config-grid">${config.map((entry) => `
+        <li>
+          <strong>Ch ${entry.channel}</strong>
+          <span class="channel-order">${entry.colorOrder}</span>
+          <span>${speedLabel(entry.protocolValue)}</span>
+          <span>${entry.ledCount} LEDs</span>
+        </li>`).join('')}</ul>`;
+    }
+
+    let configFeedbackTimer = null;
+    const showConfigFeedback = (message, kind) => {
+      const feedback = byId('configFeedback');
+      clearTimeout(configFeedbackTimer);
+      feedback.className = `inline-feedback ${kind}`;
+      feedback.textContent = message;
+      feedback.hidden = false;
+      configFeedbackTimer = setTimeout(() => {
+        feedback.classList.add('is-fading');
+        configFeedbackTimer = setTimeout(() => {
+          feedback.hidden = true;
+          feedback.classList.remove('is-fading');
+        }, 400);
+      }, 3000);
+    };
+
+    let configApplyTimer = null;
+    const applyConfiguration = async () => {
+      clearTimeout(configApplyTimer);
+      if (!client || !byId('cfgLeds').checkValidity()) return;
+
+      const controls = ['cfgChannel', 'cfgOrder', 'cfgSpeed', 'cfgLeds'].map($);
+      const requestedLedCount = Number(byId('cfgLeds').value);
+      controls.forEach((control) => { control.disabled = true; });
+      showConfigFeedback('Updating device…', '');
+      try {
+        const channel = Number(byId('cfgChannel').value);
+        const config = await client.configure({
+          channel,
+          colorOrder: byId('cfgOrder').value,
+          protocol: byId('cfgSpeed').value,
+          ledCount: requestedLedCount,
+        });
+        renderConfigTable(config);
+        buildTestChannelSelect(config);
+        setStatus('Configuration updated.', 'ok');
+        addLog('ok', 'Device configuration updated; affected LED buffers were cleared.');
+        const target = channel === BROADCAST_CHANNEL ? `${config.length} channels` : `channel ${channel}`;
+        showConfigFeedback(`Updated ${target}.`, 'is-ok');
+      } catch (err) {
+        let actualLedCount = null;
+        try {
+          const actualConfig = await refreshConfig();
+          actualLedCount = actualConfig[0]?.ledCount ?? null;
+        } catch { /* retain the original configuration error */ }
+        const rejectedValue = err?.name === 'OpalinxError' && err.code === ErrorCode.INVALID_PARAMETER;
+        showConfigFeedback(
+          rejectedValue && actualLedCount != null
+            ? `${requestedLedCount.toLocaleString()} LEDs/channel is unsupported; the device remains at ${actualLedCount.toLocaleString()}.`
+            : `Could not update configuration: ${friendlyError(err)}`,
+          'is-error',
+        );
+        reportError('Configure failed', err);
+      } finally {
+        controls.forEach((control) => { control.disabled = false; });
+      }
+    };
+
+    for (const id of ['cfgChannel', 'cfgOrder', 'cfgSpeed']) {
+      byId(id).addEventListener('change', applyConfiguration);
+    }
+    byId('cfgLeds').addEventListener('input', () => {
+      clearTimeout(configApplyTimer);
+      configApplyTimer = setTimeout(applyConfiguration, 450);
+    });
+    byId('cfgLeds').addEventListener('change', applyConfiguration);
+
+    // ---- Guided LED diagnostics, refresh test, and reusable patterns ----
+    let activeLedTask = null;
+    let lastThroughputResult = null;
+
+    const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+    const isBusyError = (err) => err?.name === 'OpalinxError' && err.code === ErrorCode.BUSY;
+    const isPipelineSaturation = (err) => isBusyError(err) || err?.name === 'OpalinxTimeoutError';
+    const requireCondition = (condition, message) => {
+      if (!condition) throw new Error(message);
+    };
+    const propagateUnexpectedError = (error) => {
+      throw error;
+    };
+    async function retryWhileBusy(operation, { attempts = 40, interval = 10 } = {}) {
+      let lastError;
+      for (let attempt = 0; attempt < attempts; attempt++) {
+        try {
+          return await operation();
+        } catch (err) {
+          if (!isBusyError(err)) throw err;
+          lastError = err;
+          await delay(interval);
+        }
+      }
+      throw lastError;
+    }
+    const formatBytes = (bytes) => bytes >= 1024 * 1024
+      ? `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+      : bytes >= 1024 ? `${(bytes / 1024).toFixed(1)} kB` : `${bytes} B`;
+
+    function patternColor(type, index, count, brightness, phase = 0) {
+      const level = Math.round(255 * brightness);
+      const off = [0, 0, 0, 0];
+      if (type === 'red') return [level, 0, 0, 0];
+      if (type === 'green') return [0, level, 0, 0];
+      if (type === 'blue') return [0, 0, level, 0];
+      if (type === 'white') return [level, level, level, 0];
+      if (type === 'alternating') return (index + phase) % 2
+        ? [0, level, level, 0] : [level, 0, 0, 0];
+      if (type === 'checker') return (index + phase) % 2 ? [level, level, level, 0] : off;
+      if (type === 'gradient') {
+        const position = count <= 1 ? 0 : index / (count - 1);
+        const segment = Math.min(2, Math.floor(position * 3));
+        const mix = position * 3 - segment;
+        if (segment === 0) return [Math.round(level * (1 - mix)), Math.round(level * mix), 0, 0];
+        if (segment === 1) return [0, Math.round(level * (1 - mix)), Math.round(level * mix), 0];
+        return [Math.round(level * mix), 0, Math.round(level * (1 - mix)), 0];
+      }
+      return off;
+    }
+
+    async function prepareGeneratedFrame(
+      channel,
+      generator,
+      { ack = true, ledLimit = null } = {},
+    ) {
+      const entries = Array.isArray(channel)
+        ? (client?.config ?? []).filter((entry) => channel.includes(entry.channel))
+        : channel === BROADCAST_CHANNEL
+        ? [...(client?.config ?? [])]
+        : (client?.config ?? []).filter((entry) => entry.channel === channel);
+      if (!entries.length) throw new Error('No configured channel is available for this test.');
+
+      let transferred = 0;
+      const unacknowledgedUpdates = [];
+      for (const entry of entries) {
+        const ledCount = ledLimit == null ? entry.ledCount : Math.min(entry.ledCount, ledLimit);
+        const components = bytesPerLed(entry.colorOrder);
+        const logical = new Uint8Array(ledCount * components);
+        for (let led = 0; led < ledCount; led++) {
+          logical.set(generator(led, ledCount, entry).slice(0, components), led * components);
+        }
+        const wire = reorderToWire(logical, entry.colorOrder);
+        const maxChunk = maxPixelsPerRequest(components);
+        for (let offset = 0; offset < ledCount; offset += maxChunk) {
+          const count = Math.min(maxChunk, ledCount - offset);
+          const start = offset * components;
+          const pixels = wire.slice(start, start + count * components);
+          if (ack) {
+            await client.setPixels(entry.channel, count, pixels, { offset, ack: true });
+          } else {
+            unacknowledgedUpdates.push({ channel: entry.channel, count, pixels, offset });
+          }
+          transferred += 5 + pixels.length;
+        }
+      }
+      // Independent channel data remains separate Opalinx frames, but coalescing those frames into a
+      // single Web Serial write avoids 16+ browser/USB write round trips per displayed frame.
+      if (unacknowledgedUpdates.length) await client.setPixelsMany(unacknowledgedUpdates);
+      return transferred;
+    }
+
+    function commitGeneratedFrame(channel, ack = true) {
+      // A range is committed with broadcast Show so every selected channel becomes visible on the
+      // same refresh boundary, including on devices without per-channel Show support.
+      return commitTest(Array.isArray(channel) ? BROADCAST_CHANNEL : channel, ack);
+    }
+
+    async function writeGeneratedFrame(
+      channel,
+      generator,
+      { ack = true, commitAck = true, ledLimit = null } = {},
+    ) {
+      const transferred = await prepareGeneratedFrame(channel, generator, { ack, ledLimit });
+      await commitGeneratedFrame(channel, commitAck);
+      return transferred + 1;
+    }
+
+    function resetTaskButtons(type) {
+      if (type === 'signal') {
+        byId('startSignalTest').hidden = false;
+        byId('stopSignalTest').hidden = true;
+      } else if (type === 'stress') {
+        byId('startStressTest').hidden = false;
+        byId('stopStressTest').hidden = true;
+      } else if (type === 'throughput') {
+        byId('startThroughputTest').hidden = false;
+        byId('stopThroughputTest').hidden = true;
+      }
+    }
+
+    async function stopActiveLedTask({ blackoutAfter = true } = {}) {
+      const task = activeLedTask;
+      if (task) {
+        task.cancelled = true;
+        try { await task.promise; } catch { /* task reports its own error */ }
+      }
+      if (blackoutAfter && client) await blackout();
+    }
+
+    async function runSignalTest(task) {
+      let step = 0;
+      let previousChannel = null;
+      let previousType = null;
+      try {
+        setLedOutputMode('none');
+        while (!task.cancelled && client) {
+          const channel = Number(byId('signalChannel').value);
+          const type = byId('signalPattern').value;
+          const interval = Number(byId('signalInterval').value);
+          if (previousChannel !== null && (channel !== previousChannel || type !== previousType)) {
+            await blackout();
+            step = 0;
+            if (task.cancelled || !client) break;
+          }
+          await writeGeneratedFrame(channel, (index, count) => {
+            if (type === 'walk') return index === step % count ? [64, 64, 64, 0] : [0, 0, 0, 0];
+            if (type === 'alternating') return patternColor('alternating', index, count, 0.25, step);
+            const primary = step % 3;
+            return primary === 0 ? [64, 0, 0, 0] : primary === 1 ? [0, 64, 0, 0] : [0, 0, 64, 0];
+          });
+          step++;
+          byId('signalStatus').textContent = type === 'walk'
+            ? `Step ${step} · One moving pixel`
+            : `Step ${step}: watch for flicker, incorrect colors, or pixels outside the pattern.`;
+          previousChannel = channel;
+          previousType = type;
+          await delay(interval);
+        }
+      } catch (err) {
+        byId('signalStatus').textContent = `LED diagnostics stopped: ${friendlyError(err)}`;
+        reportError('LED diagnostics failed', err);
+      } finally {
+        if (activeLedTask === task) activeLedTask = null;
+        resetTaskButtons('signal');
+        if (client) {
+          try { await blackout(); } catch (err) { reportError('LED diagnostics blackout failed', err); }
+        }
+      }
+    }
+
+    byId('startSignalTest').addEventListener('click', async () => {
+      await stopActiveLedTask({ blackoutAfter: false });
+      byId('startSignalTest').hidden = true;
+      byId('stopSignalTest').hidden = false;
+      byId('signalStatus').textContent = 'Starting LED diagnostics…';
+      const task = { type: 'signal', cancelled: false, promise: null };
+      activeLedTask = task;
+      task.promise = runSignalTest(task);
+    });
+    byId('stopSignalTest').addEventListener('click', () => stopActiveLedTask());
+    for (const id of ['signalChannel', 'signalPattern', 'signalInterval']) {
+      byId(id).addEventListener('change', () => {
+        if (activeLedTask?.type === 'signal') byId('signalStatus').textContent = 'Updating LED diagnostics…';
+      });
+    }
+
+    async function runThroughputTest(task) {
+      const channelScope = selectedChannelRange('throughput');
+      const entries = channelScope.entries;
+      const durationMs = 5000;
+      const mode = channelScope.all ? byId('throughputMode').value : 'independent';
+      let messages = 0;
+      let bytes = 0;
+      let startedAt = performance.now();
+      let lastMetricsUpdate = startedAt;
+      try {
+        requireCondition(entries.length > 0, 'No configured channel is available for this test.');
+        const broadcastConfigurationMatches = entries.every(
+          (entry) => entry.colorOrder === entries[0].colorOrder
+            && entry.ledCount === entries[0].ledCount,
+        );
+        requireCondition(
+          mode !== 'broadcast' || broadcastConfigurationMatches,
+          'Broadcast testing requires matching channel configurations.',
+        );
+
+        setLedOutputMode('none');
+        const workloadEntries = mode === 'broadcast' ? entries.slice(0, 1) : entries;
+        const workloads = workloadEntries.map((entry, entryIndex) => {
+          const components = bytesPerLed(entry.colorOrder);
+          const ledCount = Math.min(entry.ledCount, maxPixelsPerRequest(components));
+          const logical = new Uint8Array(ledCount * components);
+          for (let led = 0; led < ledCount; led++) {
+            for (let component = 0; component < components; component++) {
+              logical[led * components + component] = (led * 37 + component * 71 + entryIndex * 29) & 0xff;
+            }
+          }
+          const wire = reorderToWire(logical, entry.colorOrder);
+          return {
+            channel: mode === 'broadcast' ? BROADCAST_CHANNEL : entry.channel,
+            ledCount,
+            wire,
+            payloadBytes: 5 + wire.length,
+          };
+        });
+        const payloadBytesPerCycle = workloads.reduce((sum, work) => sum + work.payloadBytes, 0);
+        const ledsPerCycle = workloads.reduce((sum, work) => sum + work.ledCount, 0);
+        const workloadLabel = mode === 'broadcast'
+          ? `broadcast to ${entries.length} channels`
+          : channelScope.all
+            ? `${workloads.length} independent channels`
+            : workloads.length === 1
+              ? `channel ${channelScope.first}`
+              : `channels ${channelScope.first}–${channelScope.last} (${workloads.length} independent)`;
+        const context = `${info?.transport || 'unknown transport'} · ${workloadLabel}`;
+        byId('throughputMetrics').hidden = false;
+        byId('throughputPayload').textContent = `${formatBytes(payloadBytesPerCycle)} · ${ledsPerCycle.toLocaleString()} LEDs/cycle`;
+        byId('throughputContext').textContent = context;
+        byId('throughputStatus').textContent = 'Calibrating acknowledgement interval…';
+
+        const timeoutFor = (interval) => {
+          const batchBytes = payloadBytesPerCycle * interval;
+          const baud = serialEnvironment?.options?.baudRate || 3000000;
+          const conservativeRate = info?.transport === 'usb-cdc' ? 250000 : Math.max(1000, baud / 10);
+          return Math.min(30000, Math.max(2000, batchBytes / conservativeRate * 4000 + 1000));
+        };
+        const sendCycleBatch = async (interval) => {
+          for (const work of workloads) {
+            await client.setPixelsBatch(work.channel, work.ledCount, work.wire, {
+              messages: interval,
+              timeout: timeoutFor(interval),
+            });
+          }
+          return {
+            messages: interval * workloads.length,
+            bytes: interval * payloadBytesPerCycle,
+          };
+        };
+
+        let best = { interval: 8, rate: 0 };
+        for (const interval of [8, 16, 32, 64, 128, 256, 512]) {
+          if (task.cancelled || !client) break;
+          const errorsBefore = task.deviceErrors;
+          const calibrationStarted = performance.now();
+          try {
+            const sent = await sendCycleBatch(interval);
+            const elapsed = Math.max(1, performance.now() - calibrationStarted);
+            const rate = sent.bytes / elapsed * 1000;
+            if (task.deviceErrors === errorsBefore && rate > best.rate) best = { interval, rate };
+            if (task.deviceErrors > errorsBefore) break;
+          } catch (err) {
+            if (isBusyError(err) || err?.name === 'OpalinxTimeoutError') break;
+            propagateUnexpectedError(err);
+          }
+        }
+        const acknowledgementInterval = best.interval;
+        byId('throughputStatus').textContent = `Using acknowledgements every ${acknowledgementInterval} messages · warming up…`;
+        task.deviceErrors = 0;
+
+        // Warm up USB/driver buffers, then reset optional firmware counters immediately before the
+        // measured workload. Devices without the vendor extension continue with host-side timing.
+        await sendCycleBatch(Math.min(acknowledgementInterval, 16));
+        const hasFirmwareMetrics = await optionalPerformanceMetrics({ reset: true }) !== null;
+        startedAt = performance.now();
+        lastMetricsUpdate = startedAt;
+
+        while (!task.cancelled && client && performance.now() - startedAt < durationMs) {
+          const sent = await sendCycleBatch(acknowledgementInterval);
+          messages += sent.messages;
+          bytes += sent.bytes;
+          const elapsed = Math.max(1, performance.now() - startedAt);
+          const now = performance.now();
+          if (now - lastMetricsUpdate >= 100) {
+            byId('throughputMessages').textContent = String(messages);
+            byId('throughputRate').textContent = `${formatBytes(bytes / elapsed * 1000)}/s`;
+            byId('throughputBytes').textContent = formatBytes(bytes);
+            byId('throughputElapsed').textContent = `${(elapsed / 1000).toFixed(1)} s`;
+            lastMetricsUpdate = now;
+          }
+        }
+
+        if (client) await client.getConfig({ timeout: timeoutFor(1) });
+        const firmwareMetrics = client && hasFirmwareMetrics
+          ? await optionalPerformanceMetrics()
+          : null;
+        await delay(0);
+        const elapsed = Math.max(1, performance.now() - startedAt);
+        byId('throughputMessages').textContent = String(messages);
+        byId('throughputErrors').textContent = String(task.deviceErrors);
+        byId('throughputRate').textContent = `${formatBytes(bytes / elapsed * 1000)}/s`;
+        byId('throughputBytes').textContent = formatBytes(bytes);
+        byId('throughputElapsed').textContent = `${(elapsed / 1000).toFixed(1)} s`;
+        if (firmwareMetrics) {
+          const average = (total, count) => count ? `${(total / count).toFixed(1)} µs avg` : '—';
+          byId('throughputCobs').textContent = `${average(firmwareMetrics.cobsUs, firmwareMetrics.frames)} · ${firmwareMetrics.cobsMaxUs} µs max`;
+          byId('throughputCrc').textContent = `${average(firmwareMetrics.crcUs, firmwareMetrics.frames)} · ${firmwareMetrics.crcMaxUs} µs max`;
+          byId('throughputPixelCopy').textContent = `${average(firmwareMetrics.pixelCopyUs, firmwareMetrics.pixelMessages)} · ${firmwareMetrics.pixelCopyMaxUs} µs max`;
+          byId('throughputFirmware').textContent = `${average(firmwareMetrics.dispatchUs, firmwareMetrics.frames)} · ${firmwareMetrics.dispatchMaxUs} µs max`;
+          const processingUs = firmwareMetrics.cobsUs + firmwareMetrics.crcUs + firmwareMetrics.dispatchUs;
+          byId('throughputProcessing').textContent = average(processingUs, firmwareMetrics.frames);
+          byId('throughputUartBytes').textContent = formatBytes(firmwareMetrics.uartBytes);
+          byId('throughputRxPeak').textContent = `${formatBytes(firmwareMetrics.uartRxPeak)} queued`;
+          byId('throughputOverflows').textContent = String(firmwareMetrics.parserOverflows);
+          task.firmwareMetrics = firmwareMetrics;
+        } else {
+          for (const id of ['throughputCobs', 'throughputCrc', 'throughputPixelCopy', 'throughputFirmware', 'throughputProcessing', 'throughputUartBytes', 'throughputRxPeak', 'throughputOverflows']) {
+            byId(id).textContent = 'Not reported';
+          }
+        }
+        const measuredRate = bytes / elapsed * 1000;
+        let bottleneck = task.deviceErrors ? 'Communication errors' : 'Transport / host path';
+        if (firmwareMetrics?.parserOverflows) bottleneck = 'Firmware receive queue';
+        else if (firmwareMetrics?.frames) {
+          const processingUs = firmwareMetrics.cobsUs + firmwareMetrics.crcUs + firmwareMetrics.dispatchUs;
+          const processingCapacity = processingUs
+            ? firmwareMetrics.uartBytes / (processingUs / 1000000)
+            : Infinity;
+          if (measuredRate >= processingCapacity * 0.8) bottleneck = 'Firmware processing';
+        }
+        byId('throughputBottleneck').textContent = bottleneck;
+        task.context = context;
+        task.acknowledgementInterval = acknowledgementInterval;
+        task.bottleneck = bottleneck;
+        lastThroughputResult = {
+          context, acknowledgementInterval, bottleneck, mode,
+          rate: measuredRate, errors: task.deviceErrors,
+        };
+        byId('throughputStatus').textContent = task.cancelled
+          ? `Stopped · ${formatBytes(measuredRate)}/s`
+          : `Serial payload rate: ${formatBytes(measuredRate)}/s with ${task.deviceErrors} errors (Every ${acknowledgementInterval} messages · ${mode}).`;
+        addLog(task.deviceErrors ? 'warn' : 'ok', `Serial throughput test: ${formatBytes(measuredRate)}/s; ${task.deviceErrors} errors; ${mode}.`);
+      } catch (err) {
+        byId('throughputStatus').textContent = `Throughput test stopped: ${friendlyError(err)}`;
+        reportError('Serial throughput test failed', err);
+      } finally {
+        byId('throughputStatus').classList.remove('is-busy');
+        byId('throughputStatus').removeAttribute('aria-busy');
+        if (activeLedTask === task) activeLedTask = null;
+        resetTaskButtons('throughput');
+        if (client) {
+          try { await blackout(); } catch (err) { reportError('Throughput test blackout failed', err); }
+        }
+      }
+    }
+
+    byId('startThroughputTest').addEventListener('click', async () => {
+      await stopActiveLedTask({ blackoutAfter: false });
+      byId('startThroughputTest').hidden = true;
+      byId('stopThroughputTest').hidden = false;
+      byId('throughputStatus').classList.add('is-busy');
+      byId('throughputStatus').setAttribute('aria-busy', 'true');
+      byId('throughputStatus').textContent = 'Starting throughput test…';
+      const task = { type: 'throughput', cancelled: false, promise: null, deviceErrors: 0 };
+      activeLedTask = task;
+      task.promise = runThroughputTest(task);
+    });
+    byId('stopThroughputTest').addEventListener('click', () => stopActiveLedTask());
+    const updateThroughputModeAvailability = () => {
+      configureChannelRange('throughput', client?.config ?? []);
+      const allChannels = byId('throughputChannelScope').value === 'all';
+      byId('throughputMode').disabled = !allChannels;
+      if (!allChannels) byId('throughputMode').value = 'independent';
+    };
+    for (const id of ['throughputChannelScope', 'throughputChannelFirst', 'throughputChannelLast']) {
+      byId(id).addEventListener('change', updateThroughputModeAvailability);
+    }
+
+    function updateStressMetrics(frames, errors, latencies, bytes, startedAt) {
+      const elapsed = Math.max(1, performance.now() - startedAt);
+      const average = latencies.length ? latencies.reduce((sum, value) => sum + value, 0) / latencies.length : 0;
+      byId('stressFrames').textContent = String(frames);
+      byId('stressErrors').textContent = String(errors);
+      byId('stressFps').textContent = `${(frames / elapsed * 1000).toFixed(1)} fps`;
+      byId('stressAverage').textContent = latencies.length ? `${average.toFixed(1)} ms` : '—';
+      byId('stressDataRate').textContent = `${formatBytes(bytes / elapsed * 1000)}/s`;
+      byId('stressBytes').textContent = formatBytes(bytes);
+    }
+
+    function describeStressCandidate(entries, ledsPerChannel) {
+      const total = entries.length * ledsPerChannel;
+      return entries.length > 1
+        ? `${ledsPerChannel}/channel · ${total} total`
+        : `${ledsPerChannel}`;
+    }
+
+    async function runStressTest(task) {
+      const channelScope = selectedChannelRange('stress');
+      const ledScope = {
+        entries: channelScope.entries,
+        maximum: channelScope.entries.length
+          ? Math.min(...channelScope.entries.map((entry) => entry.ledCount))
+          : 0,
+      };
+      const frameTarget = channelScope.all ? BROADCAST_CHANNEL : channelScope.channels;
+      const targetFps = Number(byId('stressTargetFps').value);
+      const startedAt = performance.now();
+      let frames = 0;
+      let errors = 0;
+      let bytes = 0;
+      let bestLimit = 0;
+      let bestFps = 0;
+      let bestDataRate = 0;
+      let bestP95 = Infinity;
+      let bestFirmwareMetrics = null;
+      let displayedFirmwareMetrics = null;
+      let currentCandidate = null;
+      const latencies = [];
+      const originalConfig = (client?.config ?? []).map((entry) => ({ ...entry }));
+      const canConfigureChannel = hasCapability(info.capabilities, Capability.PER_CHANNEL_CONFIG);
+      const selectedChannels = new Set(channelScope.channels);
+      const stressConfigEntries = originalConfig.filter((entry) => selectedChannels.has(entry.channel));
+      let stressConfigurationChanged = false;
+
+      const configureStressCount = async (ledCount) => {
+        const targets = canConfigureChannel ? stressConfigEntries : stressConfigEntries.slice(0, 1);
+        // Mark this before sending: the device may apply CONFIGURE even if its response is lost.
+        stressConfigurationChanged = true;
+        for (const entry of targets) {
+          await retryWhileBusy(() => client.configure({
+              channel: canConfigureChannel ? entry.channel : BROADCAST_CHANNEL,
+              colorOrder: entry.colorOrder,
+              protocol: entry.protocolValue,
+              ledCount,
+            }));
+        }
+      };
+
+      const restoreStressConfiguration = async () => {
+        if (!stressConfigurationChanged || !client) return;
+        const targets = canConfigureChannel ? stressConfigEntries : stressConfigEntries.slice(0, 1);
+        for (const entry of targets) {
+          await retryWhileBusy(() => client.configure({
+              channel: canConfigureChannel ? entry.channel : BROADCAST_CHANNEL,
+              colorOrder: entry.colorOrder,
+              protocol: entry.protocolValue,
+              ledCount: entry.ledCount,
+            }));
+        }
+        stressConfigurationChanged = false;
+        renderConfigTable(client.config);
+        buildTestChannelSelect(client.config);
+      };
+      byId('stressMetrics').hidden = false;
+      setLedOutputMode('none');
+      byId('stressLeds').textContent = '—';
+      byId('stressLimit').textContent = 'Finding…';
+      updateStressMetrics(0, 0, [], 0, startedAt);
+      try {
+        requireCondition(ledScope.maximum > 0, 'No configured channel is available for this test.');
+        const firmwareMetricsSupported = await optionalPerformanceMetrics({ reset: true }) !== null;
+        // The configured LED count is only a safe starting point, not the test ceiling. Expand
+        // automatically until output timing fails or CONFIGURE reports the device's capacity, then
+        // use binary search to locate the reliable boundary. Opalinx LED counts are 16-bit values.
+        const protocolLedLimit = 0xffff;
+        const targetFrameTime = 1000 / targetFps;
+        // WS281x output has a hard serial-wire ceiling independent of USB or controller speed.
+        // Use the slowest selected channel configuration as the upper search bound instead of
+        // spending time measuring LED counts that cannot physically meet the requested cadence.
+        const physicalLedLimit = stressConfigEntries.reduce((limit, entry) => {
+          const bitTimeUs = entry.protocolValue === 1 ? 2.5 : 1.25;
+          const resetUs = 300;
+          const availableUs = Math.max(0, targetFrameTime * 1000 - resetUs);
+          const channelLimit = Math.floor(availableUs / (bytesPerLed(entry.colorOrder) * 8 * bitTimeUs));
+          return Math.min(limit, channelLimit);
+        }, protocolLedLimit);
+        let low = 1;
+        let high = Math.max(1, Math.min(protocolLedLimit, physicalLedLimit));
+        let coarseCandidate = Math.min(64, high);
+        let refining = false;
+        const samplesPerLevel = 24;
+        const verificationFrames = Math.max(30, Math.ceil(targetFps * 1.5));
+        const passedCandidates = [];
+        const workloadLabel = channelScope.all
+          ? `all ${ledScope.entries.length} independent channels`
+          : channelScope.first === channelScope.last
+            ? `channel ${channelScope.first}`
+            : `channels ${channelScope.first}–${channelScope.last} (${ledScope.entries.length} independent channels)`;
+
+        while (!task.cancelled && client) {
+          if (refining && low > high) break;
+          const candidate = refining ? Math.ceil((low + high) / 2) : coarseCandidate;
+          currentCandidate = candidate;
+          const candidateLatencies = [];
+          let candidateErrors = 0;
+          let candidateSaturated = false;
+          const errorsBeforeCandidate = task.deviceErrors;
+          const bytesBeforeCandidate = bytes;
+          byId('stressStatus').textContent = `Preparing ${candidate} LEDs/channel…`;
+          try {
+            await configureStressCount(candidate);
+          } catch (err) {
+            // ERR_INVALID_PARAMETER marks the device's capacity. It is a useful search boundary,
+            // not a test failure that needs to be shown as an error.
+            if (err?.name === 'OpalinxError' && err.code === ErrorCode.INVALID_PARAMETER) {
+              byId('stressStatus').textContent = `Device capacity is below ${candidate} LEDs/channel; refining…`;
+              refining = true;
+              low = bestLimit + 1;
+              high = candidate - 1;
+              await delay(0);
+              continue;
+            }
+            propagateUnexpectedError(err);
+          }
+          // Warm up transport and LED buffers. This acknowledged frame is deliberately excluded
+          // from candidate timing and firmware counters.
+          try {
+            await writeGeneratedFrame(
+              frameTarget,
+              (index, count) => patternColor('checker', index, count, 0.18, 0),
+              { ledLimit: candidate, ack: false, commitAck: true },
+            );
+          } catch (err) {
+            if (!isPipelineSaturation(err)) propagateUnexpectedError(err);
+            errors++;
+            byId('stressStatus').textContent = `${candidate} LEDs/channel saturated during preparation; refining…`;
+            refining = true;
+            low = bestLimit + 1;
+            high = candidate - 1;
+            await delay(Math.max(100, targetFrameTime * 4));
+            continue;
+          }
+          // Measure physical output completions for this candidate independently. This prevents a
+          // fast fire-and-forget producer from appearing to meet the target when frames are being
+          // coalesced while the LED transmitter is still busy.
+          if (firmwareMetricsSupported) await optionalPerformanceMetrics({ reset: true });
+          const candidateStarted = performance.now();
+          byId('stressLeds').textContent = describeStressCandidate(ledScope.entries, candidate);
+          byId('stressStatus').textContent = `Testing ${candidate} LEDs/channel at ${targetFps} fps…`;
+
+          // Stage the first measured frame, then send its acknowledged Show. During each cycle,
+          // prepare and queue Show N+1 before awaiting SHOW_ACK(N). opalinx-js gates the following
+          // buffer write on that acknowledgement, so the device stays at exactly one transmitting
+          // frame plus one queued frame without allowing frame N+2 to overwrite the staging buffer.
+          bytes += await prepareGeneratedFrame(
+            frameTarget,
+            (index, count) => patternColor('checker', index, count, 0.18, frames),
+            { ledLimit: candidate, ack: false },
+          );
+          let showCompleted = commitGeneratedFrame(frameTarget, true);
+
+          for (let sample = 0; sample < samplesPerLevel && !task.cancelled && client; sample++) {
+            byId('stressStatus').textContent = `Testing ${candidate} LEDs/channel at ${targetFps} fps · frame ${sample + 1}/${samplesPerLevel}`;
+            const frameStarted = performance.now();
+            try {
+              let preparedBytes = 0;
+              let nextShowCompleted = null;
+              if (sample + 1 < samplesPerLevel) {
+                preparedBytes = await prepareGeneratedFrame(
+                  frameTarget,
+                  (index, count) => patternColor('checker', index, count, 0.18, frames + 1),
+                  { ledLimit: candidate, ack: false },
+                );
+                // Queue the successor before waiting for the current frame's completion. This is
+                // the operation that removes the SHOW_ACK round-trip from the output critical path.
+                nextShowCompleted = commitGeneratedFrame(frameTarget, true);
+              }
+              await showCompleted;
+              showCompleted = nextShowCompleted;
+              bytes += 1 + preparedBytes;
+              const latency = performance.now() - frameStarted;
+              candidateLatencies.push(latency);
+              latencies.push(latency);
+              frames++;
+            } catch (err) {
+              errors++;
+              candidateErrors++;
+              if (isPipelineSaturation(err)) {
+                candidateSaturated = true;
+                byId('stressStatus').textContent = `${candidate} LEDs/channel saturated the output pipeline; refining…`;
+                // Let the active DMA transfer and any queued frame finish before inspecting the
+                // result or reconfiguring for the next binary-search candidate.
+                await delay(Math.max(100, targetFrameTime * 4));
+              } else {
+                propagateUnexpectedError(err);
+              }
+              break;
+            }
+            updateStressMetrics(frames, errors, latencies, bytes, startedAt);
+            const deadline = candidateStarted + (sample + 1) * targetFrameTime;
+            if (performance.now() < deadline) await delay(deadline - performance.now());
+          }
+
+          if (task.cancelled || !client) break;
+          const candidateFinished = performance.now();
+          // The acknowledged final Show is the ordered batch barrier. Device errors emitted by
+          // earlier fire-and-forget frames have been received before its acknowledgement.
+          await delay(0);
+          const candidateFirmwareMetrics = firmwareMetricsSupported && !candidateSaturated
+            ? await optionalPerformanceMetrics()
+            : null;
+          displayedFirmwareMetrics = candidateFirmwareMetrics;
+          candidateErrors += task.deviceErrors - errorsBeforeCandidate;
+          errors += task.deviceErrors - errorsBeforeCandidate;
+          const sortedCandidateLatencies = [...candidateLatencies].sort((a, b) => a - b);
+          const candidateP95 = sortedCandidateLatencies.length
+            ? sortedCandidateLatencies[Math.min(
+              sortedCandidateLatencies.length - 1,
+              Math.ceil(sortedCandidateLatencies.length * 0.95) - 1,
+            )]
+            : Infinity;
+          const candidateElapsed = Math.max(1, candidateFinished - candidateStarted);
+          const completedRefreshes = candidateFirmwareMetrics?.showCount
+            ?? candidateLatencies.length;
+          const candidateFps = completedRefreshes / candidateElapsed * 1000;
+          const candidateDataRate = (bytes - bytesBeforeCandidate) / candidateElapsed * 1000;
+          const averageShowUs = candidateFirmwareMetrics?.showCount
+            ? candidateFirmwareMetrics.showUs / candidateFirmwareMetrics.showCount
+            : null;
+          // A refresh level is sustainable only when the physical LED engine—not merely the USB
+          // producer—completes at the requested cadence. A small rate tolerance absorbs browser
+          // timer quantisation; the measured output duration itself must fit inside one frame.
+          const physicalTimingPassed = !candidateFirmwareMetrics || (
+            candidateFirmwareMetrics.showCount >= samplesPerLevel
+            && averageShowUs <= targetFrameTime * 1000
+          );
+          // Firmware-confirmed output timing is authoritative when available. Browser-side P95 is
+          // only a fallback because a single scheduler pause can otherwise reject a valid 60 fps
+          // candidate. The 10% allowance absorbs Web Serial and timer quantisation on that path.
+          const hostTimingPassed = candidateFirmwareMetrics
+            ? true
+            : candidateP95 <= targetFrameTime * 1.10;
+          // End-to-end cadence includes pixel transfer, parsing, copying, and physical output.
+          // Firmware show duration alone cannot reveal a transport-limited workload.
+          const cadencePassed = candidateFps >= targetFps * 0.98;
+          const passed = candidateErrors === 0
+            && candidateLatencies.length === samplesPerLevel
+            && hostTimingPassed
+            && cadencePassed
+            && physicalTimingPassed;
+
+          updateStressMetrics(frames, errors, latencies, bytes, startedAt);
+          byId('stressFps').textContent = Number.isFinite(candidateFps) ? `${candidateFps.toFixed(1)} fps` : '—';
+          if (passed) {
+            bestLimit = candidate;
+            bestFps = candidateFps;
+            bestDataRate = candidateDataRate;
+            bestP95 = candidateP95;
+            bestFirmwareMetrics = candidateFirmwareMetrics;
+            passedCandidates.push({
+              limit: candidate,
+              fps: candidateFps,
+              dataRate: candidateDataRate,
+              p95: candidateP95,
+              firmwareMetrics: candidateFirmwareMetrics,
+            });
+            byId('stressLimit').textContent = `${bestLimit}/channel`;
+            if (refining) {
+              low = candidate + 1;
+            } else if (candidate >= high) {
+              break;
+            } else {
+              const nextCandidate = candidate * 2;
+              if (nextCandidate > high) {
+                refining = true;
+                low = candidate + 1;
+              } else {
+                coarseCandidate = nextCandidate;
+              }
+            }
+          } else {
+            if (refining) {
+              high = candidate - 1;
+            } else {
+              refining = true;
+              low = bestLimit + 1;
+              high = candidate - 1;
+            }
+          }
+          await delay(0);
+        }
+
+        // Confirm the proposed boundary with a longer run. If an edge candidate was a transient
+        // success, fall back to the next-highest candidate that already passed the search phase.
+        if (bestLimit && !task.cancelled && client) {
+          const confirmationCandidates = [...passedCandidates]
+            .sort((a, b) => b.limit - a.limit)
+            .filter((entry, index, entries) => index === 0 || entry.limit !== entries[index - 1].limit);
+          let confirmed = null;
+          for (const record of confirmationCandidates) {
+            byId('stressStatus').textContent = `Confirming ${record.limit} LEDs/channel across ${workloadLabel}…`;
+            await configureStressCount(record.limit);
+            try {
+              await writeGeneratedFrame(
+                frameTarget,
+                (index, count) => patternColor('checker', index, count, 0.18, 0),
+                { ledLimit: record.limit, ack: false, commitAck: true },
+              );
+            } catch (err) {
+              if (!isPipelineSaturation(err)) propagateUnexpectedError(err);
+              errors++;
+              await delay(Math.max(100, targetFrameTime * 4));
+              continue;
+            }
+            if (firmwareMetricsSupported) await optionalPerformanceMetrics({ reset: true });
+            const confirmationStarted = performance.now();
+            const confirmationBytesBefore = bytes;
+            const confirmationErrorsBefore = task.deviceErrors;
+            const confirmationLatencies = [];
+            let confirmationFailed = false;
+
+            bytes += await prepareGeneratedFrame(
+              frameTarget,
+              (index, count) => patternColor('checker', index, count, 0.18, frames),
+              { ledLimit: record.limit, ack: false },
+            );
+            let showCompleted = commitGeneratedFrame(frameTarget, true);
+
+            for (let sample = 0; sample < verificationFrames && !task.cancelled && client; sample++) {
+              byId('stressStatus').textContent = `Confirming ${record.limit} LEDs/channel at ${targetFps} fps · frame ${sample + 1}/${verificationFrames}`;
+              const frameStarted = performance.now();
+              try {
+                let preparedBytes = 0;
+                let nextShowCompleted = null;
+                if (sample + 1 < verificationFrames) {
+                  preparedBytes = await prepareGeneratedFrame(
+                    frameTarget,
+                    (index, count) => patternColor('checker', index, count, 0.18, frames + 1),
+                    { ledLimit: record.limit, ack: false },
+                  );
+                  nextShowCompleted = commitGeneratedFrame(frameTarget, true);
+                }
+                await showCompleted;
+                showCompleted = nextShowCompleted;
+                bytes += 1 + preparedBytes;
+                const latency = performance.now() - frameStarted;
+                confirmationLatencies.push(latency);
+                latencies.push(latency);
+                frames++;
+              } catch (err) {
+                if (!isPipelineSaturation(err)) propagateUnexpectedError(err);
+                errors++;
+                confirmationFailed = true;
+                await delay(Math.max(100, targetFrameTime * 4));
+                break;
+              }
+              updateStressMetrics(frames, errors, latencies, bytes, startedAt);
+              const deadline = confirmationStarted + (sample + 1) * targetFrameTime;
+              if (performance.now() < deadline) await delay(deadline - performance.now());
+            }
+
+            if (task.cancelled || !client) break;
+            await delay(0);
+            const confirmationFinished = performance.now();
+            const confirmationMetrics = firmwareMetricsSupported && !confirmationFailed
+              ? await optionalPerformanceMetrics()
+              : null;
+            displayedFirmwareMetrics = confirmationMetrics ?? displayedFirmwareMetrics;
+            const deviceErrors = task.deviceErrors - confirmationErrorsBefore;
+            errors += deviceErrors;
+            const sortedLatencies = [...confirmationLatencies].sort((a, b) => a - b);
+            const confirmationP95 = sortedLatencies.length
+              ? sortedLatencies[Math.min(
+                sortedLatencies.length - 1,
+                Math.ceil(sortedLatencies.length * 0.95) - 1,
+              )]
+              : Infinity;
+            const elapsed = Math.max(1, confirmationFinished - confirmationStarted);
+            const completed = confirmationMetrics?.showCount ?? confirmationLatencies.length;
+            const averageShowUs = confirmationMetrics?.showCount
+              ? confirmationMetrics.showUs / confirmationMetrics.showCount
+              : null;
+            const expectedLatencies = verificationFrames;
+            const confirmationFps = completed / elapsed * 1000;
+            const confirmationPassed = !confirmationFailed
+              && deviceErrors === 0
+              && confirmationLatencies.length === expectedLatencies
+              && confirmationFps >= targetFps * 0.98
+              && (confirmationMetrics
+                ? confirmationMetrics.showCount >= verificationFrames
+                  && averageShowUs <= targetFrameTime * 1000
+                : confirmationP95 <= targetFrameTime * 1.10);
+
+            if (confirmationPassed) {
+              confirmed = {
+                limit: record.limit,
+                fps: confirmationFps,
+                dataRate: (bytes - confirmationBytesBefore) / elapsed * 1000,
+                p95: confirmationP95,
+                firmwareMetrics: confirmationMetrics,
+              };
+              break;
+            }
+          }
+
+          if (confirmed) {
+            bestLimit = confirmed.limit;
+            bestFps = confirmed.fps;
+            bestDataRate = confirmed.dataRate;
+            bestP95 = confirmed.p95;
+            bestFirmwareMetrics = confirmed.firmwareMetrics;
+          } else if (!task.cancelled) {
+            bestLimit = 0;
+          }
+        }
+
+        const firmwareMetrics = bestFirmwareMetrics ?? displayedFirmwareMetrics;
+        if (firmwareMetrics) {
+          const average = (total, count) => count ? `${(total / count).toFixed(1)} µs avg` : '—';
+          byId('stressPixelCopy').textContent = `${average(firmwareMetrics.pixelCopyUs, firmwareMetrics.pixelMessages)} · ${firmwareMetrics.pixelCopyMaxUs} µs max`;
+          byId('stressOutputCopy').textContent = firmwareMetrics.outputCopyUs == null
+            ? '—'
+            : `${average(firmwareMetrics.outputCopyUs, firmwareMetrics.showCount)} · ${firmwareMetrics.outputCopyMaxUs} µs max`;
+          byId('stressOutputSubmit').textContent = firmwareMetrics.outputSubmitUs == null
+            ? '—'
+            : `${average(firmwareMetrics.outputSubmitUs, firmwareMetrics.showCount)} · ${firmwareMetrics.outputSubmitMaxUs} µs max`;
+          byId('stressOutputDrain').textContent = firmwareMetrics.outputSubmitUs == null
+            ? '—'
+            : `${Math.max(0, Math.round((firmwareMetrics.showUs - firmwareMetrics.outputCopyUs - firmwareMetrics.outputSubmitUs) / Math.max(1, firmwareMetrics.showCount)))} µs avg`;
+          byId('stressShow').textContent = `${average(firmwareMetrics.showUs, firmwareMetrics.showCount)} · ${firmwareMetrics.showMaxUs} µs max`;
+          task.firmwareMetrics = firmwareMetrics;
+        }
+
+        if (bestLimit) {
+          const bestMetrics = bestFirmwareMetrics;
+          const bestShowUs = bestMetrics?.showCount
+            ? bestMetrics.showUs / bestMetrics.showCount
+            : null;
+          const bestSubmitUs = bestMetrics?.showCount && bestMetrics.outputSubmitUs != null
+            ? bestMetrics.outputSubmitUs / bestMetrics.showCount
+            : null;
+          const bestDrainUs = bestSubmitUs != null && bestShowUs != null && bestMetrics
+            ? Math.max(0, bestShowUs - bestSubmitUs - bestMetrics.outputCopyUs / bestMetrics.showCount)
+            : null;
+          const frameBudgetMs = 1000 / targetFps;
+          const bottleneck = bestSubmitUs != null && bestSubmitUs >= bestDrainUs && bestShowUs / 1000 >= frameBudgetMs * 0.9
+            ? 'Output frame encoding'
+            : bestDrainUs != null && bestDrainUs / 1000 >= frameBudgetMs * 0.9
+              ? 'Physical LED output'
+              : bestShowUs != null && bestShowUs / 1000 >= frameBudgetMs * 0.9
+                ? 'Controller output pipeline'
+            : bestP95 >= frameBudgetMs * 0.9
+              ? 'Transport / host preparation'
+              : 'Transport / controller pipeline';
+          byId('stressBottleneck').textContent = bottleneck;
+          byId('stressVerification').textContent = firmwareMetricsSupported
+            ? `${verificationFrames} frames · firmware-confirmed · ${workloadLabel}`
+            : `${verificationFrames} frames · acknowledged fallback · ${workloadLabel}`;
+          task.bottleneck = bottleneck;
+          task.verification = byId('stressVerification').textContent;
+        } else {
+          byId('stressBottleneck').textContent = errors ? 'Communication errors' : 'Below target cadence';
+          byId('stressVerification').textContent = firmwareMetricsSupported
+            ? 'Firmware metrics available' : 'Acknowledged fallback';
+        }
+
+        if (task.cancelled) {
+          byId('stressStatus').textContent = `Stopped · Best verified: ${bestLimit || 'none'} LEDs/channel`;
+        } else if (bestLimit) {
+          const reachedProtocolLimit = bestLimit === protocolLedLimit;
+          byId('stressLimit').textContent = reachedProtocolLimit
+            ? `≥${bestLimit}/channel`
+            : `${bestLimit}/channel`;
+          byId('stressFps').textContent = `${bestFps.toFixed(1)} fps`;
+          byId('stressDataRate').textContent = `${formatBytes(bestDataRate)}/s`;
+          byId('stressStatus').textContent = reachedProtocolLimit
+            ? `Opalinx limit verified: at least ${bestLimit} LEDs/channel at ${targetFps} fps · ${workloadLabel}.`
+            : `Recommended maximum: ${bestLimit} LEDs/channel at ${targetFps} fps · ${workloadLabel}.`;
+        } else {
+          byId('stressLimit').textContent = 'Below target';
+          byId('stressStatus').textContent = `No LED count sustained ${targetFps} fps without errors. Try a lower target.`;
+        }
+        addLog(errors ? 'warn' : 'ok', `LED refresh test: reliable limit ${bestLimit || 'below target'} LEDs/channel at ${targetFps} fps; ${errors} errors.`);
+      } catch (err) {
+        const candidateContext = currentCandidate ? ` at ${currentCandidate} LEDs/channel` : '';
+        byId('stressStatus').textContent = `Refresh test stopped${candidateContext}: ${friendlyError(err)}`;
+        const failureMetrics = await optionalPerformanceMetrics();
+        if (failureMetrics?.backendError) {
+          const backendNames = { 0x101: 'out of memory', 0x102: 'invalid argument', 0x103: 'invalid state', 0x107: 'timeout' };
+          const code = `0x${failureMetrics.backendError.toString(16)}`;
+          addLog('info', `PARLIO backend error: ${backendNames[failureMetrics.backendError] ?? 'ESP-IDF error'} (${code}).`);
+        }
+        reportError(`LED refresh test failed${candidateContext}`, err);
+      } finally {
+        if (activeLedTask === task) activeLedTask = null;
+        resetTaskButtons('stress');
+        if (client) {
+          // A failed candidate can leave one physical refresh or a late response in flight. Give
+          // the device and Web Serial decoder a clean boundary before restoring CONFIGURE; without
+          // this pause, recovery can produce a second, misleading timeout.
+          await delay(Math.max(250, (1000 / targetFps) * 4));
+          try { await restoreStressConfiguration(); }
+          catch (err) { reportError('Could not restore configuration after refresh test', err); }
+          try { await blackout(); } catch (err) { reportError('Refresh test blackout failed', err); }
+        }
+      }
+    }
+
+    byId('startStressTest').addEventListener('click', async () => {
+      await stopActiveLedTask({ blackoutAfter: false });
+      byId('startStressTest').hidden = true;
+      byId('stopStressTest').hidden = false;
+      byId('stressStatus').textContent = 'Finding the reliable LED limit…';
+      const task = { type: 'stress', cancelled: false, promise: null, deviceErrors: 0 };
+      activeLedTask = task;
+      task.promise = runStressTest(task);
+    });
+    byId('stopStressTest').addEventListener('click', () => stopActiveLedTask());
+    for (const id of ['stressChannelScope', 'stressChannelFirst', 'stressChannelLast']) {
+      byId(id).addEventListener('change', () => configureChannelRange('stress', client?.config ?? []));
+    }
+
+    let patternUpdateTimer = null;
+    let patternUpdateRunning = false;
+    let patternUpdatePending = false;
+
+    async function applyCurrentPattern({ log = false } = {}) {
+      if (!client) return;
+      if (patternUpdateRunning) {
+        patternUpdatePending = true;
+        return;
+      }
+      const button = byId('showPattern');
+      patternUpdateRunning = true;
+      button.disabled = true;
+      try {
+        do {
+          patternUpdatePending = false;
+          await stopActiveLedTask({ blackoutAfter: false });
+          const type = byId('patternType').value;
+          const brightness = Number(byId('patternBrightness').value) / 100;
+          await writeGeneratedFrame(
+            Number(byId('patternChannel').value),
+            (index, count) => patternColor(type, index, count, brightness),
+          );
+          setLedOutputMode('pattern');
+          byId('patternStatus').textContent = `${byId('patternType').selectedOptions[0].text} displayed at ${byId('patternBrightness').value}% brightness.`;
+          if (log) addLog('ok', `Displayed ${byId('patternType').selectedOptions[0].text.toLowerCase()} test pattern.`);
+        } while (patternUpdatePending && client);
+      } catch (err) {
+        byId('patternStatus').textContent = `Could not display pattern: ${friendlyError(err)}`;
+        reportError('Test pattern failed', err);
+      } finally {
+        patternUpdateRunning = false;
+        button.disabled = ledOutputMode === 'pattern';
+      }
+    }
+
+    function schedulePatternUpdate(delay = 0) {
+      clearTimeout(patternUpdateTimer);
+      patternUpdateTimer = setTimeout(() => applyCurrentPattern(), delay);
+    }
+
+    byId('patternBrightness').addEventListener('input', () => {
+      byId('patternBrightnessValue').value = `${byId('patternBrightness').value}%`;
+      schedulePatternUpdate(100);
+    });
+    byId('patternType').addEventListener('change', () => schedulePatternUpdate());
+    byId('patternChannel').addEventListener('change', () => schedulePatternUpdate());
+    byId('showPattern').addEventListener('click', () => {
+      clearTimeout(patternUpdateTimer);
+      applyCurrentPattern({ log: true });
+    });
+    byId('patternBlackout').addEventListener('click', async () => {
+      try {
+        clearTimeout(patternUpdateTimer);
+        await stopActiveLedTask();
+        byId('patternStatus').textContent = 'All channels blacked out.';
+      } catch (err) { reportError('Pattern blackout failed', err); }
+    });
+
+    function updatePowerEstimate() {
+      const profile = byId('powerCurrentProfile').value;
+      const custom = profile === 'custom';
       byId('powerCustomField').hidden = !custom;
       const milliampsPerComponent = Number(custom ? byId('powerCustomCurrent').value : profile);
       const voltage = Number(byId('powerVoltage').value);
@@ -803,4 +3147,3 @@
   </script>
 </body>
 </html>
-
