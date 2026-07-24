@@ -537,6 +537,10 @@ The admission table uses `IDLE` for no active Show, `ACTIVE` for one active Show
 `ACTIVE_PENDING` for one active and one pending Show. It applies after all request-specific
 validation. Rejection does not change pipeline or pixel state.
 
+An implementation MAY complete Show synchronously. If it does not evaluate another request until
+that Show completes, the `ACTIVE` and `ACTIVE_PENDING` states are not externally observable, and no
+pending-Show storage is required.
+
 | Request | `IDLE` | `ACTIVE` | `ACTIVE_PENDING` |
 |---------|--------|----------|------------------|
 | `Set Pixels`, `Fill Channel` | Accept | Accept for the next frame | `ERR_BUSY` |
