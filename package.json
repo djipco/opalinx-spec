@@ -1,0 +1,12 @@
+{
+  "name": "opalinx-spec-site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build-site.mjs",
+    "check": "node scripts/check-site.mjs"
+  },
+  "devDependencies": {
+    "marked": "^16.4.2"
+  }
+}

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 100" role="img" aria-labelledby="title">
+  <title id="title">Opalinx OX monogram</title>
+  <g id="mark" fill="currentColor">
+    <path d="M70 9a41 41 0 1 0 0 82V75a25 25 0 1 1 0-50V9Z"/>
+    <path d="m78 18 19 0 17 22 17-22h19l-26 32 26 32h-19l-17-22-17 22H78l26-32Z"/>
+  </g>
+</svg>
