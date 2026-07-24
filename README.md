@@ -920,12 +920,15 @@ baseline is:
 An advertised protocol value is a behavioral promise, not merely descriptive metadata. A device MUST
 support that protocol for every otherwise-valid use.
 
-An implementation is considered **Opalinx** 1.0 conformant if it:
+A host implementation is conformant when it satisfies every applicable host requirement in this
+specification, including the safe-acceptance requirements in
+[Receiver Framing and Recovery](#receiver-framing-and-recovery).
+
+A device is considered **Opalinx** 1.0 conformant if it:
 
 - Recognizes all standard request messages and supports the mandatory baseline above.
-- Device implementations use the exact rejection precedence defined in
-  [Receiver Framing and Recovery](#receiver-framing-and-recovery); host implementations satisfy its
-  safe-acceptance requirements without needing the same internal check order.
+- Uses the exact rejection precedence defined in
+  [Receiver Framing and Recovery](#receiver-framing-and-recovery).
 - Implements the session-boundary cleanup and persistent device state defined in
   [Connection and session boundaries](#connection-and-session-boundaries).
 - Silently discards oversized, undecodable, short, and checksum-invalid candidates without affecting
