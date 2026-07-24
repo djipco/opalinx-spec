@@ -35,9 +35,10 @@ product or service that is sold, licensed, rented, subscription-funded, advertis
 otherwise intended for commercial advantage or monetary compensation. This includes hardware,
 firmware, software, plugins, integrations, and hosted services.
 
-An end user does not need a separate licence merely to use a product or service supplied under a
-valid commercial licence, including in the end user's commercial activities. This exception does
-not permit developing, manufacturing, distributing, or supplying a separate Opalinx implementation.
+An end user does not need a separate licence merely to use a product or service supplied by the
+licensor or under a valid commercial licence, including in the end user's commercial activities.
+This exception does not permit developing, manufacturing, distributing, or supplying a separate
+Opalinx implementation.
 
 This licence grants no permission for commercial use. To obtain a commercial licence, contact
 Jean-Philippe Cô at <jp@djip.co>.
@@ -54,11 +55,11 @@ presented as the authoritative Opalinx specification or as an official Opalinx r
 Recipients receive permissions directly from the licensor under this licence. You may not impose
 terms that purport to replace or restrict those permissions for the Materials themselves.
 
-By intentionally submitting a contribution to an official Opalinx project, you grant the licensor a
-perpetual, worldwide, irrevocable, royalty-free licence, with the right to sublicense and relicense,
-to use, reproduce, modify, distribute, and license that contribution under any terms. You represent
-that you have the authority to grant these rights and, to the extent permitted by law, waive and
-agree not to assert moral rights in the contribution.
+By intentionally submitting a contribution to a repository or project published by the licensor,
+you grant the licensor a perpetual, worldwide, irrevocable, royalty-free licence, with the right to
+sublicense and relicense, to use, reproduce, modify, distribute, and license that contribution under
+any terms. You represent that you have the authority to grant these rights and, to the extent
+permitted by law, waive and agree not to assert moral rights in the contribution.
 
 ## 5. Name, logo, and certification
 
