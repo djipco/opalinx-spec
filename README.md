@@ -108,12 +108,8 @@ The 16-bit payload-length field can represent payloads from 0 to 65535 bytes. Ev
 accept at least 9 request payload bytes, enough for one RGBW `Set Pixels` operation (`5` addressing
 bytes + `4` component bytes).
 
-A host MUST accept every core Opalinx 1.0 response whose payload satisfies the bound defined for
-that response. The largest is CONFIG at 1020 bytes. The core portion of INFO is at most 475 bytes:
-its 7-byte prefix plus one instance of every non-vendor Opalinx 1.0 information record at its maximum
-length. Unknown future information records, vendor-information records, and namespaced vendor
-responses are extensions to that core requirement. A host MUST accept the response sizes required
-by every extension or vendor contract it chooses to use; it MAY reject larger unsupported extension
+A host MUST accept response payloads up to 2048 bytes. An extension or vendor contract MAY require
+a host using it to accept larger response payloads. A host MAY reject larger unsupported extension
 or vendor payloads without treating the core protocol version as incompatible.
 
 Each device advertises the largest request payload it accepts in the `max_payload_length` field of
@@ -130,7 +126,7 @@ For an endpoint required to accept payloads of at most `P` bytes, the maximum de
 This is the maximum COBS-encoded length of a `D`-byte frame. The complete transmitted frame may
 therefore occupy `E + 1` bytes including its `0x00` delimiter. A device uses its advertised
 `max_payload_length` as `P`. A host uses the largest response payload it is required or configured
-to accept, which MUST be at least 1020. An endpoint supporting the full wire-format maximum uses
+to accept, which MUST be at least 2048. An endpoint supporting the full wire-format maximum uses
 `P = 65535`; then `D = 65542`, `E = 65801`, and the complete delimited frame is at most 65802 bytes.
 
 ### Receiver Framing and Recovery
@@ -663,7 +659,8 @@ structured capability data uses an information record.
 #### INFO extensions
 
 Immediately after the 7-byte fixed prefix, the remainder of the INFO payload contains
-type-length-value (TLV) information records. Each record has this structure:
+type-length-value (TLV) information records. The complete INFO payload, including the fixed prefix,
+MUST NOT exceed 2048 bytes. Each record has this structure:
 
 | Field  | Size     | Description                                      |
 |--------|----------|--------------------------------------------------|
@@ -705,9 +702,10 @@ The Opalinx 1.0 standard records are:
 
 Every required record MUST occur exactly once. A known standard record with an invalid length or a
 duplicate known record makes INFO malformed. Record order has no meaning; senders SHOULD emit
-standard records in ascending type order for deterministic diagnostics. Adding a standard record is
-additive and does not change the offsets or interpretation of the fixed prefix. Changing, removing,
-or reordering a fixed field requires an incompatible protocol revision.
+standard records in ascending type order for deterministic diagnostics. Adding a standard record
+within the INFO payload limit is additive and does not change the offsets or interpretation of the
+fixed prefix. Changing, removing, or reordering a fixed field requires an incompatible protocol
+revision.
 
 Every standard INFO string record MUST contain well-formed UTF-8. An invalid UTF-8 sequence makes
 the INFO response malformed and the host MUST reject it. Length limits count encoded bytes; no
