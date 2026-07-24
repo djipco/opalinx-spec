@@ -68,7 +68,7 @@ async function renderPage(source, destination, options) {
   if (source === 'README.md') {
     markdown = markdown
       .replace('(conformance/README.md)', '(../conformance/)')
-      .replace('(LICENSE.md)', '(../license/)');
+      .replaceAll('(LICENSE.md', '(../license/');
   }
   let body = addHeadingIds(marked.parse(markdown, { gfm: true }))
     .replace(/<blockquote>\s*<p>\[!WARNING\]\s*/g, '<blockquote class="warning">\n<p>');
